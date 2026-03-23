@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:vie_de_famille/core/models/avatars.dart';
 import 'package:vie_de_famille/core/models/member.dart';
 import 'package:vie_de_famille/core/providers.dart';
+import 'package:vie_de_famille/ui/screens/home_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 
 /// Formulaire d'ajout d'un nouveau membre de la famille
@@ -65,7 +66,17 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
       await ref.read(currentMemberProvider.notifier).set(member.id);
     }
 
-    if (mounted) Navigator.of(context).pop();
+    if (!mounted) return;
+
+    // Si on peut pop (vient du FamilyViewScreen) → retour
+    // Sinon (premier lancement depuis splash) → aller au HomeScreen
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    }
   }
 
   @override
