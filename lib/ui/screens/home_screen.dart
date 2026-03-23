@@ -1,51 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:vie_de_famille/core/providers.dart';
+import 'package:vie_de_famille/ui/screens/family_view_screen.dart';
+import 'package:vie_de_famille/ui/screens/tasks_screen.dart';
+import 'package:vie_de_famille/ui/screens/calendar_screen.dart';
+import 'package:vie_de_famille/ui/screens/messages_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
+import 'package:vie_de_famille/ui/widgets/member_avatar.dart';
 
-/// Écran d'accueil — dashboard du jour
-class HomeScreen extends StatefulWidget {
+/// Écran principal — navigation bottom tabs + dashboard
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: Text(
-          'VieDeFamille',
-          style: GoogleFonts.quicksand(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            onPressed: () {},
-          ),
-        ],
-      ),
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          _buildDashboard(),
-          _buildPlaceholder('Tâches', Icons.check_circle_outline),
-          _buildPlaceholder('Planning', Icons.calendar_month),
-          _buildPlaceholder('Courses', Icons.shopping_cart_outlined),
-          _buildPlaceholder('Budget', Icons.account_balance_wallet_outlined),
+          _DashboardTab(onNavigate: (i) => setState(() => _currentIndex = i)),
+          const TasksScreen(),
+          const CalendarScreen(),
+          const MessagesScreen(),
+          const FamilyViewScreen(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (i) => setState(() => _currentIndex = i),
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
@@ -63,74 +55,137 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Planning',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart_outlined),
-            activeIcon: Icon(Icons.shopping_cart),
-            label: 'Courses',
+            icon: Icon(Icons.chat_bubble_outline),
+            activeIcon: Icon(Icons.chat_bubble),
+            label: 'Messages',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            activeIcon: Icon(Icons.account_balance_wallet),
-            label: 'Budget',
+            icon: Icon(Icons.people_outline),
+            activeIcon: Icon(Icons.people),
+            label: 'Profil',
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildDashboard() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Greeting
-          Text(
-            'Bonjour ! 👋',
-            style: GoogleFonts.quicksand(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Voici le résumé de la journée',
-            style: GoogleFonts.nunito(
-              fontSize: 16,
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 24),
+/// Onglet dashboard — résumé de la journée
+class _DashboardTab extends ConsumerWidget {
+  final ValueChanged<int> onNavigate;
 
-          // Cards résumé
-          _buildSummaryCard(
-            icon: Icons.check_circle_outline,
-            title: 'Tâches du jour',
-            subtitle: 'Aucune tâche pour le moment',
-            color: AppTheme.primary,
-          ),
-          const SizedBox(height: 12),
-          _buildSummaryCard(
-            icon: Icons.calendar_today,
-            title: 'Événements',
-            subtitle: 'Aucun événement prévu',
-            color: AppTheme.secondary,
-          ),
-          const SizedBox(height: 12),
-          _buildSummaryCard(
-            icon: Icons.shopping_cart_outlined,
-            title: 'Courses',
-            subtitle: 'Aucune liste en cours',
-            color: AppTheme.accent,
-          ),
-          const SizedBox(height: 12),
-          _buildSummaryCard(
-            icon: Icons.account_balance_wallet_outlined,
-            title: 'Budget du mois',
-            subtitle: 'Pas encore de dépenses',
-            color: AppTheme.budgetPositive,
-          ),
-        ],
+  const _DashboardTab({required this.onNavigate});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentMember = ref.watch(currentMemberDataProvider);
+    final members = ref.watch(membersProvider);
+    final todayTasks = ref.watch(todayTasksProvider);
+    final events = ref.watch(eventsProvider);
+    final messages = ref.watch(messagesProvider);
+
+    // Événements du jour
+    final now = DateTime.now();
+    final todayEvents = events.where((e) => e.isOnDay(now)).toList();
+
+    // Tâches terminées aujourd'hui
+    final doneToday = todayTasks.where((t) => t.completed).length;
+
+    final greeting = currentMember != null
+        ? 'Bonjour ${currentMember.name} !'
+        : 'Bonjour !';
+
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        title: Text(
+          'VieDeFamille',
+          style: GoogleFonts.quicksand(fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Salutation
+            Text(
+              greeting,
+              style: GoogleFonts.quicksand(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              DateFormat('EEEE d MMMM', 'fr_FR').format(now),
+              style: GoogleFonts.nunito(
+                fontSize: 16,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Avatars famille (scroll horizontal)
+            if (members.isNotEmpty) ...[
+              SizedBox(
+                height: 80,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: members.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    final m = members[index];
+                    return MemberAvatar(
+                      member: m,
+                      size: 52,
+                      showName: true,
+                      showPoints: true,
+                      onTap: () => onNavigate(4),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Carte tâches du jour
+            _buildSummaryCard(
+              icon: Icons.check_circle_outline,
+              title: 'Tâches du jour',
+              subtitle: todayTasks.isEmpty
+                  ? 'Aucune tâche pour aujourd\'hui'
+                  : '$doneToday/${todayTasks.length} terminées',
+              color: AppTheme.primary,
+              onTap: () => onNavigate(1),
+            ),
+            const SizedBox(height: 12),
+
+            // Carte événements du jour
+            _buildSummaryCard(
+              icon: Icons.calendar_today,
+              title: 'Événements',
+              subtitle: todayEvents.isEmpty
+                  ? 'Aucun événement prévu'
+                  : '${todayEvents.length} événement(s) aujourd\'hui',
+              color: AppTheme.secondary,
+              onTap: () => onNavigate(2),
+            ),
+            const SizedBox(height: 12),
+
+            // Carte messages récents
+            _buildSummaryCard(
+              icon: Icons.chat_bubble_outline,
+              title: 'Messages',
+              subtitle: messages.isEmpty
+                  ? 'Aucun message'
+                  : '${messages.length} message(s)',
+              color: AppTheme.accent,
+              onTap: () => onNavigate(3),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -140,10 +195,13 @@ class _HomeScreenState extends State<HomeScreen> {
     required String title,
     required String subtitle,
     required Color color,
+    VoidCallback? onTap,
   }) {
     return Card(
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        onTap: onTap,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           width: 48,
           height: 48,
@@ -159,31 +217,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
-      ),
-    );
-  }
-
-  Widget _buildPlaceholder(String title, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 64, color: AppTheme.textSecondary),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: GoogleFonts.quicksand(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Bientôt disponible...',
-            style: GoogleFonts.nunito(color: AppTheme.textSecondary),
-          ),
-        ],
       ),
     );
   }

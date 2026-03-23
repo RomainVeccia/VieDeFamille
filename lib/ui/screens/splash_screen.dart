@@ -1,29 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:vie_de_famille/core/providers.dart';
+import 'package:vie_de_famille/ui/screens/add_member_screen.dart';
 import 'package:vie_de_famille/ui/screens/home_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 
-/// Splash screen — animation logo VieDeFamille
-class SplashScreen extends StatefulWidget {
+/// Splash screen — init storage puis navigation conditionnelle
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Naviguer vers l'accueil après l'animation
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      }
-    });
+    _init();
+  }
+
+  Future<void> _init() async {
+    // Attendre l'animation + initialisation du storage
+    await Future.delayed(const Duration(milliseconds: 2000));
+
+    if (!mounted) return;
+
+    // Vérifier si des membres existent
+    final storage = ref.read(storageServiceProvider);
+    final members = storage?.getMembers() ?? [];
+
+    if (!mounted) return;
+
+    if (members.isEmpty) {
+      // Pas de membres → aller à l'ajout
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const AddMemberScreen()),
+      );
+    } else {
+      // Membres existants → aller au dashboard
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    }
   }
 
   @override

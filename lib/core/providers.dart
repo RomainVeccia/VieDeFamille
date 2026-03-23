@@ -1,0 +1,230 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vie_de_famille/core/models/member.dart';
+import 'package:vie_de_famille/core/models/family_task.dart';
+import 'package:vie_de_famille/core/models/family_message.dart';
+import 'package:vie_de_famille/core/models/family_event.dart';
+import 'package:vie_de_famille/core/services/task_service.dart';
+import 'package:vie_de_famille/data/local/storage_service.dart';
+
+// ============================================================
+// Storage — initialisé dans le splash, puis overridé
+// ============================================================
+final storageServiceProvider = Provider<StorageService?>((ref) => null);
+
+// ============================================================
+// MEMBRES
+// ============================================================
+class MembersNotifier extends StateNotifier<List<Member>> {
+  final StorageService? _storage;
+
+  MembersNotifier(this._storage) : super(_storage?.getMembers() ?? []);
+
+  Future<void> add(Member member) async {
+    state = [...state, member];
+    await _storage?.saveMembers(state);
+  }
+
+  Future<void> update(Member member) async {
+    state = state.map((m) => m.id == member.id ? member : m).toList();
+    await _storage?.saveMembers(state);
+  }
+
+  Future<void> remove(String id) async {
+    state = state.where((m) => m.id != id).toList();
+    await _storage?.saveMembers(state);
+  }
+
+  /// Ajoute des points à un membre (gamification)
+  Future<void> addPoints(String memberId, int points) async {
+    state = state.map((m) {
+      if (m.id != memberId) return m;
+      return m.copyWith(
+        points: m.points + points,
+        totalPointsEarned: m.totalPointsEarned + points,
+      );
+    }).toList();
+    await _storage?.saveMembers(state);
+  }
+
+  /// Retire des points (quand on décoche une tâche)
+  Future<void> removePoints(String memberId, int points) async {
+    state = state.map((m) {
+      if (m.id != memberId) return m;
+      return m.copyWith(
+        points: (m.points - points).clamp(0, m.points),
+      );
+    }).toList();
+    await _storage?.saveMembers(state);
+  }
+}
+
+final membersProvider =
+    StateNotifierProvider<MembersNotifier, List<Member>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return MembersNotifier(storage);
+});
+
+// ============================================================
+// MEMBRE COURANT
+// ============================================================
+class CurrentMemberNotifier extends StateNotifier<String?> {
+  final StorageService? _storage;
+
+  CurrentMemberNotifier(this._storage)
+      : super(_storage?.getCurrentMemberId());
+
+  Future<void> set(String id) async {
+    state = id;
+    await _storage?.setCurrentMemberId(id);
+  }
+}
+
+final currentMemberProvider =
+    StateNotifierProvider<CurrentMemberNotifier, String?>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return CurrentMemberNotifier(storage);
+});
+
+/// Le Member complet du membre courant
+final currentMemberDataProvider = Provider<Member?>((ref) {
+  final memberId = ref.watch(currentMemberProvider);
+  if (memberId == null) return null;
+  final members = ref.watch(membersProvider);
+  try {
+    return members.firstWhere((m) => m.id == memberId);
+  } catch (_) {
+    return null;
+  }
+});
+
+// ============================================================
+// TÂCHES
+// ============================================================
+class TasksNotifier extends StateNotifier<List<FamilyTask>> {
+  final StorageService? _storage;
+  final Ref _ref;
+
+  TasksNotifier(this._storage, this._ref) : super(_storage?.getTasks() ?? []);
+
+  Future<void> add(FamilyTask task) async {
+    state = [...state, task];
+    await _storage?.saveTasks(state);
+  }
+
+  /// Toggle complete — ajoute/retire les points automatiquement
+  Future<void> toggle(String taskId) async {
+    state = state.map((t) {
+      if (t.id != taskId) return t;
+      if (t.completed) {
+        // Décoche → retirer les points
+        if (t.assignedTo != null) {
+          _ref
+              .read(membersProvider.notifier)
+              .removePoints(t.assignedTo!, t.pointsValue);
+        }
+        return t.uncomplete();
+      } else {
+        // Coche → ajouter les points
+        if (t.assignedTo != null) {
+          _ref
+              .read(membersProvider.notifier)
+              .addPoints(t.assignedTo!, t.pointsValue);
+        }
+        return t.complete();
+      }
+    }).toList();
+    await _storage?.saveTasks(state);
+  }
+
+  Future<void> remove(String id) async {
+    state = state.where((t) => t.id != id).toList();
+    await _storage?.saveTasks(state);
+  }
+
+  Future<void> update(FamilyTask task) async {
+    state = state.map((t) => t.id == task.id ? task : t).toList();
+    await _storage?.saveTasks(state);
+  }
+}
+
+final tasksProvider =
+    StateNotifierProvider<TasksNotifier, List<FamilyTask>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return TasksNotifier(storage, ref);
+});
+
+/// Tâches du jour
+final todayTasksProvider = Provider<List<FamilyTask>>((ref) {
+  final tasks = ref.watch(tasksProvider);
+  return TaskService.todayTasks(tasks);
+});
+
+// ============================================================
+// MESSAGES
+// ============================================================
+class MessagesNotifier extends StateNotifier<List<FamilyMessage>> {
+  final StorageService? _storage;
+
+  MessagesNotifier(this._storage) : super(_storage?.getMessages() ?? []);
+
+  Future<void> add(FamilyMessage message) async {
+    state = [message, ...state];
+    await _storage?.saveMessages(state);
+  }
+
+  Future<void> togglePin(String id) async {
+    state = state.map((m) {
+      if (m.id != id) return m;
+      return m.copyWith(pinned: !m.pinned);
+    }).toList();
+    await _storage?.saveMessages(state);
+  }
+
+  Future<void> remove(String id) async {
+    state = state.where((m) => m.id != id).toList();
+    await _storage?.saveMessages(state);
+  }
+}
+
+final messagesProvider =
+    StateNotifierProvider<MessagesNotifier, List<FamilyMessage>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return MessagesNotifier(storage);
+});
+
+// ============================================================
+// ÉVÉNEMENTS
+// ============================================================
+class EventsNotifier extends StateNotifier<List<FamilyEvent>> {
+  final StorageService? _storage;
+
+  EventsNotifier(this._storage) : super(_storage?.getEvents() ?? []);
+
+  Future<void> add(FamilyEvent event) async {
+    state = [...state, event];
+    await _storage?.saveEvents(state);
+  }
+
+  Future<void> update(FamilyEvent event) async {
+    state = state.map((e) => e.id == event.id ? event : e).toList();
+    await _storage?.saveEvents(state);
+  }
+
+  Future<void> remove(String id) async {
+    state = state.where((e) => e.id != id).toList();
+    await _storage?.saveEvents(state);
+  }
+}
+
+final eventsProvider =
+    StateNotifierProvider<EventsNotifier, List<FamilyEvent>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return EventsNotifier(storage);
+});
+
+/// Événements d'un jour spécifique
+final eventsForDayProvider =
+    Provider.family<List<FamilyEvent>, DateTime>((ref, day) {
+  final events = ref.watch(eventsProvider);
+  return events.where((e) => e.isOnDay(day)).toList();
+});
