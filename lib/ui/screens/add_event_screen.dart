@@ -115,6 +115,10 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text(
           'Nouvel événement',
           style: GoogleFonts.quicksand(fontWeight: FontWeight.bold),

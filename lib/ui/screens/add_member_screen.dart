@@ -84,6 +84,12 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
         title: Text(
           'Nouveau membre',
           style: GoogleFonts.quicksand(fontWeight: FontWeight.bold),

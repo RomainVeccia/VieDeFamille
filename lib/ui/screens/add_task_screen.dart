@@ -70,6 +70,10 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text(
           'Nouvelle tâche',
           style: GoogleFonts.quicksand(fontWeight: FontWeight.bold),
