@@ -37,7 +37,6 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       initialDate: _dueDate ?? DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      locale: const Locale('fr', 'FR'),
     );
     if (picked != null) setState(() => _dueDate = picked);
   }

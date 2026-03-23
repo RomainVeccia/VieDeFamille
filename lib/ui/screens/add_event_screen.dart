@@ -38,7 +38,6 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
       initialDate: _date,
       firstDate: DateTime(2024),
       lastDate: DateTime(2030, 12, 31),
-      locale: const Locale('fr', 'FR'),
     );
     if (picked != null) setState(() => _date = picked);
   }

@@ -36,7 +36,6 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
       initialDate: _birthday ?? DateTime(2000, 1, 1),
       firstDate: DateTime(1920),
       lastDate: DateTime.now(),
-      locale: const Locale('fr', 'FR'),
     );
     if (picked != null) setState(() => _birthday = picked);
   }
