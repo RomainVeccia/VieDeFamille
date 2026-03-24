@@ -176,15 +176,56 @@ class _DashboardTab extends ConsumerWidget {
               const SizedBox(height: 20),
             ],
 
-            // Avatars famille (scroll horizontal)
+            // Avatars famille (scroll horizontal) + bouton ajouter
             if (members.isNotEmpty) ...[
               SizedBox(
                 height: 80,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: members.length,
+                  itemCount: members.length + 1, // +1 pour le bouton "+"
                   separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemBuilder: (context, index) {
+                    // Dernier élément = bouton ajouter
+                    if (index == members.length) {
+                      return GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AddMemberScreen(),
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppTheme.primary,
+                                  width: 2,
+                                  style: BorderStyle.solid,
+                                ),
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                              ),
+                              child: const Icon(
+                                Icons.person_add,
+                                color: AppTheme.primary,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Ajouter',
+                              style: GoogleFonts.nunito(
+                                fontSize: 12,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
                     final m = members[index];
                     return MemberAvatar(
                       member: m,
