@@ -184,12 +184,28 @@ class MessagesNotifier extends StateNotifier<List<FamilyMessage>> {
     state = state.where((m) => m.id != id).toList();
     await _storage?.saveMessages(state);
   }
+
+  /// Marquer une requête comme faite / pas faite
+  Future<void> toggleDone(String id) async {
+    state = state.map((m) {
+      if (m.id != id) return m;
+      return m.copyWith(done: !m.done);
+    }).toList();
+    await _storage?.saveMessages(state);
+  }
 }
 
 final messagesProvider =
     StateNotifierProvider<MessagesNotifier, List<FamilyMessage>>((ref) {
   final storage = ref.watch(storageServiceProvider);
   return MessagesNotifier(storage);
+});
+
+/// Messages/requêtes reçus par un membre spécifique
+final messagesForMemberProvider =
+    Provider.family<List<FamilyMessage>, String>((ref, memberId) {
+  final messages = ref.watch(messagesProvider);
+  return messages.where((m) => m.recipientId == memberId).toList();
 });
 
 // ============================================================

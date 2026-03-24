@@ -27,6 +27,8 @@ class MessageCard extends StatelessWidget {
         return 'Idée 💡';
       case MessageType.announcement:
         return 'Annonce 📢';
+      case MessageType.request:
+        return 'Requête 📋';
     }
   }
 
@@ -38,6 +40,8 @@ class MessageCard extends StatelessWidget {
         return AppTheme.secondary;
       case MessageType.announcement:
         return AppTheme.error;
+      case MessageType.request:
+        return AppTheme.accent;
     }
   }
 

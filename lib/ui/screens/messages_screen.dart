@@ -12,8 +12,11 @@ class MessagesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final messages = ref.watch(messagesProvider);
+    final allMessages = ref.watch(messagesProvider);
     final members = ref.watch(membersProvider);
+
+    // Mur familial = messages publics uniquement (pas les directs)
+    final messages = allMessages.where((m) => m.isPublic).toList();
 
     final pinned = messages.where((m) => m.pinned).toList();
     final unpinned = messages.where((m) => !m.pinned).toList();
