@@ -86,15 +86,27 @@ final currentMemberProvider =
 });
 
 /// Le Member complet du membre courant
+/// Fallback : si pas de membre courant mais des membres existent, prend le premier
 final currentMemberDataProvider = Provider<Member?>((ref) {
   final memberId = ref.watch(currentMemberProvider);
-  if (memberId == null) return null;
   final members = ref.watch(membersProvider);
-  try {
-    return members.firstWhere((m) => m.id == memberId);
-  } catch (_) {
-    return null;
+
+  if (members.isEmpty) return null;
+
+  if (memberId != null) {
+    try {
+      return members.firstWhere((m) => m.id == memberId);
+    } catch (_) {
+      // memberId obsolète → fallback sur le premier
+    }
   }
+
+  // Auto-set le premier membre comme courant
+  final first = members.first;
+  Future.microtask(() {
+    ref.read(currentMemberProvider.notifier).set(first.id);
+  });
+  return first;
 });
 
 // ============================================================
