@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:vie_de_famille/core/providers.dart';
+import 'package:vie_de_famille/ui/screens/add_member_screen.dart';
 import 'package:vie_de_famille/ui/screens/family_view_screen.dart';
 import 'package:vie_de_famille/ui/screens/tasks_screen.dart';
 import 'package:vie_de_famille/ui/screens/calendar_screen.dart';
@@ -93,7 +94,7 @@ class _DashboardTab extends ConsumerWidget {
 
     final greeting = currentMember != null
         ? 'Bonjour ${currentMember.name} !'
-        : 'Bonjour !';
+        : 'Bienvenue !';
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -126,6 +127,54 @@ class _DashboardTab extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 20),
+
+            // Si pas de membres → message de bienvenue + bouton ajouter
+            if (members.isEmpty) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.family_restroom,
+                        size: 64,
+                        color: AppTheme.primary,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Commencez par ajouter\nles membres de votre famille',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.quicksand(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Chacun aura son profil, ses tâches et ses points !',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.nunito(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AddMemberScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.person_add),
+                        label: const Text('Ajouter un membre'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
 
             // Avatars famille (scroll horizontal)
             if (members.isNotEmpty) ...[

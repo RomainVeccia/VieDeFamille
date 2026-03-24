@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:vie_de_famille/core/providers.dart';
-import 'package:vie_de_famille/ui/screens/add_member_screen.dart';
 import 'package:vie_de_famille/ui/screens/home_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 
@@ -23,28 +21,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _init() async {
-    // Attendre l'animation + initialisation du storage
+    // Attendre l'animation
     await Future.delayed(const Duration(milliseconds: 2000));
 
     if (!mounted) return;
 
-    // Vérifier si des membres existent
-    final storage = ref.read(storageServiceProvider);
-    final members = storage?.getMembers() ?? [];
-
-    if (!mounted) return;
-
-    if (members.isEmpty) {
-      // Pas de membres → aller à l'ajout
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const AddMemberScreen()),
-      );
-    } else {
-      // Membres existants → aller au dashboard
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    }
+    // Toujours aller au HomeScreen — le dashboard s'adapte s'il n'y a pas de membres
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
   }
 
   @override
