@@ -93,20 +93,14 @@ final currentMemberDataProvider = Provider<Member?>((ref) {
 
   if (members.isEmpty) return null;
 
+  // Chercher le membre courant par son id
   if (memberId != null) {
-    try {
-      return members.firstWhere((m) => m.id == memberId);
-    } catch (_) {
-      // memberId obsolète → fallback sur le premier
-    }
+    final found = members.where((m) => m.id == memberId);
+    if (found.isNotEmpty) return found.first;
   }
 
-  // Auto-set le premier membre comme courant
-  final first = members.first;
-  Future.microtask(() {
-    ref.read(currentMemberProvider.notifier).set(first.id);
-  });
-  return first;
+  // Fallback : retourner le premier membre (sans modifier l'état ici)
+  return members.first;
 });
 
 // ============================================================

@@ -60,9 +60,9 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
 
     await ref.read(membersProvider.notifier).add(member);
 
-    // Si c'est le premier membre, on le définit comme membre courant
-    final members = ref.read(membersProvider);
-    if (members.length == 1) {
+    // Toujours définir le membre courant s'il n'y en a pas
+    final currentId = ref.read(currentMemberProvider);
+    if (currentId == null) {
       await ref.read(currentMemberProvider.notifier).set(member.id);
     }
 
