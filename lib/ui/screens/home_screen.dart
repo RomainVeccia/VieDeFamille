@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:vie_de_famille/core/models/family_message.dart';
 import 'package:vie_de_famille/core/providers.dart';
+import 'package:vie_de_famille/core/services/points_service.dart';
 import 'package:vie_de_famille/ui/screens/add_member_screen.dart';
 import 'package:vie_de_famille/ui/screens/family_view_screen.dart';
 import 'package:vie_de_famille/ui/screens/tasks_screen.dart';
@@ -63,7 +65,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.people_outline),
             activeIcon: Icon(Icons.people),
-            label: 'Profil',
+            label: 'Famille',
           ),
         ],
       ),
@@ -71,7 +73,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-/// Onglet dashboard — résumé de la journée
+/// Onglet dashboard — grands boutons d'accès rapide
 class _DashboardTab extends ConsumerWidget {
   final ValueChanged<int> onNavigate;
 
@@ -82,15 +84,15 @@ class _DashboardTab extends ConsumerWidget {
     final currentMember = ref.watch(currentMemberDataProvider);
     final members = ref.watch(membersProvider);
     final todayTasks = ref.watch(todayTasksProvider);
+    final allTasks = ref.watch(tasksProvider);
     final events = ref.watch(eventsProvider);
     final messages = ref.watch(messagesProvider);
 
-    // Événements du jour
     final now = DateTime.now();
     final todayEvents = events.where((e) => e.isOnDay(now)).toList();
-
-    // Tâches terminées aujourd'hui
     final doneToday = todayTasks.where((t) => t.completed).length;
+    final pendingTasks = allTasks.where((t) => !t.completed).length;
+    final publicMessages = messages.where((m) => m.isPublic).length;
 
     final greeting = currentMember != null
         ? 'Bonjour ${currentMember.name} !'
@@ -109,7 +111,7 @@ class _DashboardTab extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Salutation
+            // Salutation + date
             Text(
               greeting,
               style: GoogleFonts.quicksand(
@@ -128,7 +130,7 @@ class _DashboardTab extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
 
-            // Si pas de membres → message de bienvenue + bouton ajouter
+            // Si pas de membres → message de bienvenue
             if (members.isEmpty) ...[
               Card(
                 child: Padding(
@@ -150,15 +152,6 @@ class _DashboardTab extends ConsumerWidget {
                           color: AppTheme.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Chacun aura son profil, ses tâches et ses points !',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.nunito(
-                          fontSize: 14,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
                       const SizedBox(height: 20),
                       ElevatedButton.icon(
                         onPressed: () => Navigator.of(context).push(
@@ -176,16 +169,15 @@ class _DashboardTab extends ConsumerWidget {
               const SizedBox(height: 20),
             ],
 
-            // Avatars famille (scroll horizontal) + bouton ajouter
+            // Avatars famille + bouton ajouter
             if (members.isNotEmpty) ...[
               SizedBox(
                 height: 80,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: members.length + 1, // +1 pour le bouton "+"
+                  itemCount: members.length + 1,
                   separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemBuilder: (context, index) {
-                    // Dernier élément = bouton ajouter
                     if (index == members.length) {
                       return GestureDetector(
                         onTap: () => Navigator.of(context).push(
@@ -204,7 +196,6 @@ class _DashboardTab extends ConsumerWidget {
                                 border: Border.all(
                                   color: AppTheme.primary,
                                   width: 2,
-                                  style: BorderStyle.solid,
                                 ),
                                 color: AppTheme.primary.withValues(alpha: 0.1),
                               ),
@@ -237,76 +228,262 @@ class _DashboardTab extends ConsumerWidget {
                   },
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
+
+              // === GRANDS BOUTONS D'ACCÈS RAPIDE ===
+              // Première ligne : 3 boutons
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.calendar_month,
+                      title: 'Agenda',
+                      subtitle: todayEvents.isEmpty
+                          ? 'Aucun événement'
+                          : '${todayEvents.length} aujourd\'hui',
+                      color: AppTheme.secondary,
+                      onTap: () => onNavigate(2),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.check_circle,
+                      title: 'Tâches',
+                      subtitle: pendingTasks == 0
+                          ? 'Tout est fait !'
+                          : '$pendingTasks en attente',
+                      color: AppTheme.primary,
+                      onTap: () => onNavigate(1),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Deuxième ligne : 3 boutons
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.assignment_outlined,
+                      title: 'Requêtes',
+                      subtitle: _countPendingRequests(ref) == 0
+                          ? 'Aucune requête'
+                          : '${_countPendingRequests(ref)} en attente',
+                      color: const Color(0xFFE67E22),
+                      onTap: () => onNavigate(4),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.chat_bubble,
+                      title: 'Messages',
+                      subtitle: publicMessages == 0
+                          ? 'Aucun message'
+                          : '$publicMessages message(s)',
+                      color: AppTheme.accent,
+                      onTap: () => onNavigate(3),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Troisième ligne : Statistiques (pleine largeur)
+              _buildBigButton(
+                icon: Icons.bar_chart,
+                title: 'Statistiques',
+                subtitle: todayTasks.isEmpty
+                    ? 'Pas de données'
+                    : '$doneToday/${todayTasks.length} tâches faites aujourd\'hui',
+                color: const Color(0xFF7E57C2),
+                onTap: () => _showStats(context, ref),
+                fullWidth: true,
+              ),
             ],
-
-            // Carte tâches du jour
-            _buildSummaryCard(
-              icon: Icons.check_circle_outline,
-              title: 'Tâches du jour',
-              subtitle: todayTasks.isEmpty
-                  ? 'Aucune tâche pour aujourd\'hui'
-                  : '$doneToday/${todayTasks.length} terminées',
-              color: AppTheme.primary,
-              onTap: () => onNavigate(1),
-            ),
-            const SizedBox(height: 12),
-
-            // Carte événements du jour
-            _buildSummaryCard(
-              icon: Icons.calendar_today,
-              title: 'Événements',
-              subtitle: todayEvents.isEmpty
-                  ? 'Aucun événement prévu'
-                  : '${todayEvents.length} événement(s) aujourd\'hui',
-              color: AppTheme.secondary,
-              onTap: () => onNavigate(2),
-            ),
-            const SizedBox(height: 12),
-
-            // Carte messages récents
-            _buildSummaryCard(
-              icon: Icons.chat_bubble_outline,
-              title: 'Messages',
-              subtitle: messages.isEmpty
-                  ? 'Aucun message'
-                  : '${messages.length} message(s)',
-              color: AppTheme.accent,
-              onTap: () => onNavigate(3),
-            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSummaryCard({
+  int _countPendingRequests(WidgetRef ref) {
+    final messages = ref.read(messagesProvider);
+    final currentMember = ref.read(currentMemberDataProvider);
+    if (currentMember == null) return 0;
+    return messages
+        .where((m) =>
+            m.type == MessageType.request &&
+            m.recipientId == currentMember.id &&
+            !m.done)
+        .length;
+  }
+
+  Widget _buildBigButton({
     required IconData icon,
     required String title,
     required String subtitle,
     required Color color,
-    VoidCallback? onTap,
+    required VoidCallback onTap,
+    bool fullWidth = false,
   }) {
-    return Card(
-      child: ListTile(
-        onTap: onTap,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          width: 48,
-          height: 48,
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withValues(alpha: 0.15),
+                color.withValues(alpha: 0.05),
+              ],
+            ),
           ),
-          child: Icon(icon, color: color),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 26),
+              ),
+              const Spacer(),
+              Text(
+                title,
+                style: GoogleFonts.quicksand(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: GoogleFonts.nunito(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  /// Affiche un dialogue avec les stats de la famille
+  void _showStats(BuildContext context, WidgetRef ref) {
+    final members = ref.read(membersProvider);
+    final allTasks = ref.read(tasksProvider);
+    final completedTasks = allTasks.where((t) => t.completed).length;
+    final ranked = PointsService.ranking(members);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
         title: Text(
-          title,
-          style: GoogleFonts.nunito(fontWeight: FontWeight.w600),
+          'Statistiques famille',
+          style: GoogleFonts.quicksand(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Stats globales
+            _statRow('Membres', '${members.length}'),
+            _statRow('Tâches créées', '${allTasks.length}'),
+            _statRow('Tâches terminées', '$completedTasks'),
+            const SizedBox(height: 16),
+
+            // Classement
+            Text(
+              'Classement',
+              style: GoogleFonts.quicksand(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...ranked.asMap().entries.map((entry) {
+              final i = entry.key;
+              final m = entry.value;
+              final medal = i == 0
+                  ? '🥇'
+                  : i == 1
+                      ? '🥈'
+                      : i == 2
+                          ? '🥉'
+                          : '  ';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Text(medal, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 8),
+                    MemberAvatar(member: m, size: 32),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        m.name,
+                        style: GoogleFonts.nunito(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Text(
+                      '${m.totalPointsEarned} pts',
+                      style: GoogleFonts.nunito(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.nunito(color: AppTheme.textSecondary),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.nunito(
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
