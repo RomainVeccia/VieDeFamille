@@ -4,6 +4,8 @@ enum TaskPriority { low, medium, high }
 
 enum TaskRecurrence { none, daily, weekly, monthly }
 
+enum TaskCategory { general, poules, chat, chambre, maison }
+
 /// Tâche familiale — assignable, cochable, avec points de gamification
 class FamilyTask {
   final String id;
@@ -13,6 +15,7 @@ class FamilyTask {
   final String createdBy; // member.id
   final TaskPriority priority;
   final TaskRecurrence recurrence;
+  final TaskCategory category;
   final DateTime? dueDate;
   final bool completed;
   final DateTime? completedAt;
@@ -27,6 +30,7 @@ class FamilyTask {
     required this.createdBy,
     this.priority = TaskPriority.medium,
     this.recurrence = TaskRecurrence.none,
+    this.category = TaskCategory.general,
     this.dueDate,
     this.completed = false,
     this.completedAt,
@@ -41,6 +45,7 @@ class FamilyTask {
     required String createdBy,
     TaskPriority priority = TaskPriority.medium,
     TaskRecurrence recurrence = TaskRecurrence.none,
+    TaskCategory category = TaskCategory.general,
     DateTime? dueDate,
     int pointsValue = 10,
   }) {
@@ -52,6 +57,7 @@ class FamilyTask {
       createdBy: createdBy,
       priority: priority,
       recurrence: recurrence,
+      category: category,
       dueDate: dueDate,
       pointsValue: pointsValue,
       createdAt: DateTime.now(),
@@ -97,6 +103,7 @@ class FamilyTask {
     String? assignedTo,
     TaskPriority? priority,
     TaskRecurrence? recurrence,
+    TaskCategory? category,
     DateTime? dueDate,
     bool? completed,
     DateTime? completedAt,
@@ -110,6 +117,7 @@ class FamilyTask {
       createdBy: createdBy,
       priority: priority ?? this.priority,
       recurrence: recurrence ?? this.recurrence,
+      category: category ?? this.category,
       dueDate: dueDate ?? this.dueDate,
       completed: completed ?? this.completed,
       completedAt: completedAt ?? this.completedAt,
@@ -126,6 +134,7 @@ class FamilyTask {
         'createdBy': createdBy,
         'priority': priority.index,
         'recurrence': recurrence.index,
+        'category': category.index,
         'dueDate': dueDate?.toIso8601String(),
         'completed': completed,
         'completedAt': completedAt?.toIso8601String(),
@@ -141,6 +150,9 @@ class FamilyTask {
         createdBy: json['createdBy'] as String,
         priority: TaskPriority.values[json['priority'] as int],
         recurrence: TaskRecurrence.values[json['recurrence'] as int],
+        category: json['category'] != null
+            ? TaskCategory.values[json['category'] as int]
+            : TaskCategory.general,
         dueDate: json['dueDate'] != null
             ? DateTime.parse(json['dueDate'] as String)
             : null,

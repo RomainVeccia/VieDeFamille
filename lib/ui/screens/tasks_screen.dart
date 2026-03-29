@@ -5,6 +5,7 @@ import 'package:vie_de_famille/core/models/family_task.dart';
 import 'package:vie_de_famille/core/providers.dart';
 import 'package:vie_de_famille/core/services/task_service.dart';
 import 'package:vie_de_famille/ui/screens/add_task_screen.dart';
+import 'package:vie_de_famille/ui/screens/task_templates_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 import 'package:vie_de_famille/ui/widgets/task_card.dart';
 
@@ -165,11 +166,29 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AddTaskScreen()),
-        ),
-        child: const Icon(Icons.add),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Bouton templates pré-remplis
+          FloatingActionButton.small(
+            heroTag: 'templates',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const TaskTemplatesScreen()),
+            ),
+            backgroundColor: AppTheme.secondary,
+            child: const Icon(Icons.list_alt, size: 20),
+          ),
+          const SizedBox(height: 8),
+          // Bouton tâche personnalisée
+          FloatingActionButton(
+            heroTag: 'add',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+            ),
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }
