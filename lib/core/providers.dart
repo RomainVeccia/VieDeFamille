@@ -3,6 +3,7 @@ import 'package:vie_de_famille/core/models/member.dart';
 import 'package:vie_de_famille/core/models/family_task.dart';
 import 'package:vie_de_famille/core/models/family_message.dart';
 import 'package:vie_de_famille/core/models/family_event.dart';
+import 'package:vie_de_famille/core/models/reward.dart';
 import 'package:vie_de_famille/core/services/task_service.dart';
 import 'package:vie_de_famille/data/local/storage_service.dart';
 
@@ -249,4 +250,29 @@ final eventsForDayProvider =
     Provider.family<List<FamilyEvent>, DateTime>((ref, day) {
   final events = ref.watch(eventsProvider);
   return events.where((e) => e.isOnDay(day)).toList();
+});
+
+// ============================================================
+// RÉCOMPENSES
+// ============================================================
+class RewardsNotifier extends StateNotifier<List<Reward>> {
+  final StorageService? _storage;
+
+  RewardsNotifier(this._storage) : super(_storage?.getRewards() ?? []);
+
+  Future<void> add(Reward reward) async {
+    state = [...state, reward];
+    await _storage?.saveRewards(state);
+  }
+
+  Future<void> remove(String id) async {
+    state = state.where((r) => r.id != id).toList();
+    await _storage?.saveRewards(state);
+  }
+}
+
+final rewardsProvider =
+    StateNotifierProvider<RewardsNotifier, List<Reward>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return RewardsNotifier(storage);
 });

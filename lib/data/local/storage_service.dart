@@ -4,6 +4,7 @@ import 'package:vie_de_famille/core/models/member.dart';
 import 'package:vie_de_famille/core/models/family_task.dart';
 import 'package:vie_de_famille/core/models/family_message.dart';
 import 'package:vie_de_famille/core/models/family_event.dart';
+import 'package:vie_de_famille/core/models/reward.dart';
 
 /// Service de stockage local — SharedPreferences + JSON
 class StorageService {
@@ -11,6 +12,7 @@ class StorageService {
   static const _tasksKey = 'vdf_tasks';
   static const _messagesKey = 'vdf_messages';
   static const _eventsKey = 'vdf_events';
+  static const _rewardsKey = 'vdf_rewards';
   static const _currentMemberKey = 'vdf_current_member';
 
   // Singleton
@@ -85,6 +87,21 @@ class StorageService {
   Future<void> saveEvents(List<FamilyEvent> events) async {
     final json = jsonEncode(events.map((e) => e.toJson()).toList());
     await _prefs.setString(_eventsKey, json);
+  }
+
+  // --- Rewards ---
+  List<Reward> getRewards() {
+    final json = _prefs.getString(_rewardsKey);
+    if (json == null) return [];
+    final list = jsonDecode(json) as List<dynamic>;
+    return list
+        .map((e) => Reward.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveRewards(List<Reward> rewards) async {
+    final json = jsonEncode(rewards.map((r) => r.toJson()).toList());
+    await _prefs.setString(_rewardsKey, json);
   }
 
   // --- Current Member ---

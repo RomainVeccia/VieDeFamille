@@ -10,6 +10,7 @@ import 'package:vie_de_famille/ui/screens/family_view_screen.dart';
 import 'package:vie_de_famille/ui/screens/tasks_screen.dart';
 import 'package:vie_de_famille/ui/screens/calendar_screen.dart';
 import 'package:vie_de_famille/ui/screens/messages_screen.dart';
+import 'package:vie_de_famille/ui/screens/rewards_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 import 'package:vie_de_famille/ui/widgets/member_avatar.dart';
 
@@ -291,16 +292,34 @@ class _DashboardTab extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
 
-              // Troisième ligne : Statistiques (pleine largeur)
-              _buildBigButton(
-                icon: Icons.bar_chart,
-                title: 'Statistiques',
-                subtitle: todayTasks.isEmpty
-                    ? 'Pas de données'
-                    : '$doneToday/${todayTasks.length} tâches faites aujourd\'hui',
-                color: const Color(0xFF7E57C2),
-                onTap: () => _showStats(context, ref),
-                fullWidth: true,
+              // Troisième ligne : Récompenses + Statistiques
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.emoji_events,
+                      title: 'Récompenses',
+                      subtitle: '${currentMember?.points ?? 0} pts dispo',
+                      color: const Color(0xFFFF8F00),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const RewardsScreen()),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.bar_chart,
+                      title: 'Stats',
+                      subtitle: todayTasks.isEmpty
+                          ? 'Pas de données'
+                          : '$doneToday/${todayTasks.length} faites',
+                      color: const Color(0xFF7E57C2),
+                      onTap: () => _showStats(context, ref),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -327,7 +346,6 @@ class _DashboardTab extends ConsumerWidget {
     required String subtitle,
     required Color color,
     required VoidCallback onTap,
-    bool fullWidth = false,
   }) {
     return GestureDetector(
       onTap: onTap,
