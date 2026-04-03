@@ -112,7 +112,31 @@ class TasksNotifier extends StateNotifier<List<FamilyTask>> {
   final StorageService? _storage;
   final Ref _ref;
 
-  TasksNotifier(this._storage, this._ref) : super(_storage?.getTasks() ?? []);
+  TasksNotifier(this._storage, this._ref) : super(_storage?.getTasks() ?? []) {
+    // Reset automatique des tâches récurrentes complétées la veille
+    _resetRecurringTasks();
+  }
+
+  /// Remet à zéro les tâches récurrentes complétées avant aujourd'hui 7h
+  Future<void> _resetRecurringTasks() async {
+    final now = DateTime.now();
+    final today7h = DateTime(now.year, now.month, now.day, 7);
+    bool changed = false;
+
+    state = state.map((t) {
+      if (!t.completed) return t;
+      if (t.recurrence == TaskRecurrence.none) return t;
+      if (t.completedAt == null) return t;
+      // Si complétée avant aujourd'hui 7h → reset
+      if (t.completedAt!.isBefore(today7h)) {
+        changed = true;
+        return t.uncomplete();
+      }
+      return t;
+    }).toList();
+
+    if (changed) await _storage?.saveTasks(state);
+  }
 
   Future<void> add(FamilyTask task) async {
     state = [...state, task];

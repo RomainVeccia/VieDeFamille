@@ -129,6 +129,51 @@ class _TaskTemplatesScreenState extends ConsumerState<TaskTemplatesScreen> {
           ),
           const SizedBox(height: 8),
 
+          // Bouton tout sélectionner / désélectionner
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      if (_selectedIndices.length == templates.length) {
+                        _selectedIndices.clear();
+                      } else {
+                        _selectedIndices.clear();
+                        _selectedIndices.addAll(
+                          List.generate(templates.length, (i) => i),
+                        );
+                      }
+                    });
+                  },
+                  icon: Icon(
+                    _selectedIndices.length == templates.length
+                        ? Icons.deselect
+                        : Icons.select_all,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _selectedIndices.length == templates.length
+                        ? 'Tout désélectionner'
+                        : 'Tout sélectionner',
+                    style: GoogleFonts.nunito(fontSize: 13),
+                  ),
+                ),
+                const Spacer(),
+                if (_selectedIndices.isNotEmpty)
+                  Text(
+                    '${_selectedIndices.length}/${templates.length}',
+                    style: GoogleFonts.nunito(
+                      fontSize: 13,
+                      color: AppTheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
           // Liste des templates
           Expanded(
             child: ListView(
