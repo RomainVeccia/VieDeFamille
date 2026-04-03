@@ -96,7 +96,7 @@ class _LemmingsGameScreenState extends ConsumerState<LemmingsGameScreen>
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             _hud('OUT ${_g.spawned - _g.saved - _g.dead}'),
             _hud('IN ${_g.saved}/${_g.need}'),
-            _hud('LV ${_g.lvl + 1}/3'),
+            _hud('LV ${_g.lvl + 1}/5'),
             _hud('${_g.timer.toInt()}s'),
           ]),
         ),
