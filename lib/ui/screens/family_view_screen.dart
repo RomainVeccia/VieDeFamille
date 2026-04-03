@@ -48,81 +48,96 @@ class FamilyViewScreen extends ConsumerWidget {
               ),
             )
           : Padding(
-              padding: const EdgeInsets.all(16),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  // Ratio adaptatif : max 2 lignes visibles
-                  childAspectRatio: members.length <= 4 ? 1.3 : 1.1,
-                ),
-                itemCount: members.length,
-                itemBuilder: (context, index) {
-                  final member = members[index];
-                  final color = AppTheme.memberColors[
-                      member.colorIndex % AppTheme.memberColors.length];
+              padding: const EdgeInsets.all(12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Adapter la grille pour tout voir sans scroller
+                  final cols = members.length <= 4 ? 2 : 3;
+                  final rows = (members.length / cols).ceil();
+                  const spacing = 8.0;
+                  final availH = constraints.maxHeight - (rows - 1) * spacing;
+                  final availW = constraints.maxWidth - (cols - 1) * spacing;
+                  final cardW = availW / cols;
+                  final cardH = availH / rows;
+                  final ratio = cardW / cardH;
 
-                  return GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            MemberProfileScreen(member: member),
-                      ),
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      mainAxisSpacing: spacing,
+                      crossAxisSpacing: spacing,
+                      childAspectRatio: ratio.clamp(0.8, 2.0),
                     ),
-                    child: Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: color, width: 2),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 10),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            MemberAvatar(member: member, size: 44),
-                            const SizedBox(height: 6),
-                            Text(
-                              member.name,
-                              style: GoogleFonts.quicksand(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              '${member.status} · ${member.age} ans',
-                              style: GoogleFonts.nunito(
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            // Badge points
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${member.points} pts',
-                                style: GoogleFonts.nunito(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: color,
-                                ),
-                              ),
-                            ),
-                          ],
+                    itemCount: members.length,
+                    itemBuilder: (context, index) {
+                      final member = members[index];
+                      final color = AppTheme.memberColors[
+                          member.colorIndex % AppTheme.memberColors.length];
+                      final compact = cardH < 120;
+
+                      return GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                MemberProfileScreen(member: member),
+                          ),
                         ),
-                      ),
-                    ),
+                        child: Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(color: color, width: 2),
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 6, vertical: compact ? 4 : 8),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                MemberAvatar(
+                                    member: member,
+                                    size: compact ? 32 : 40),
+                                SizedBox(height: compact ? 3 : 5),
+                                Text(
+                                  member.name,
+                                  style: GoogleFonts.quicksand(
+                                    fontSize: compact ? 13 : 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  '${member.status} · ${member.age} ans',
+                                  style: GoogleFonts.nunito(
+                                    fontSize: compact ? 10 : 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                                SizedBox(height: compact ? 2 : 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '${member.points} pts',
+                                    style: GoogleFonts.nunito(
+                                      fontSize: compact ? 10 : 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
