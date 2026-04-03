@@ -135,12 +135,36 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          event.title,
-                                          style: GoogleFonts.nunito(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                event.title,
+                                                style: GoogleFonts.nunito(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                            if (event.recurrence != EventRecurrence.none) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.secondary.withValues(alpha: 0.15),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: Text(
+                                                  event.recurrence.shortLabel,
+                                                  style: GoogleFonts.nunito(
+                                                    fontSize: 10,
+                                                    color: AppTheme.secondary,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                         if (!event.allDay)
                                           Text(

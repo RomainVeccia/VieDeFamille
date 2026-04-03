@@ -24,6 +24,8 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
   TimeOfDay? _endTime;
   bool _allDay = false;
   final Set<String> _participantIds = {};
+  EventRecurrence _recurrence = EventRecurrence.none;
+  bool _excludeSchoolHolidays = false;
 
   @override
   void dispose() {
@@ -102,6 +104,8 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
           : _locationController.text.trim(),
       participantIds: _participantIds.toList(),
       createdBy: currentMember.id,
+      recurrence: _recurrence,
+      excludeSchoolHolidays: _excludeSchoolHolidays,
     );
 
     await ref.read(eventsProvider.notifier).add(event);
@@ -288,6 +292,110 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
                   },
                 ),
               ),
+              const SizedBox(height: 20),
+
+              // ── Récurrence ──
+              Text(
+                'Récurrence',
+                style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: EventRecurrence.values.map((r) {
+                  final selected = _recurrence == r;
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: GestureDetector(
+                        onTap: () => setState(() {
+                          _recurrence = r;
+                          if (r == EventRecurrence.none) {
+                            _excludeSchoolHolidays = false;
+                          }
+                        }),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppTheme.primary
+                                : AppTheme.cardColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: selected
+                                  ? AppTheme.primary
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                r == EventRecurrence.none
+                                    ? '1×'
+                                    : r == EventRecurrence.weekly
+                                        ? '7j'
+                                        : '30j',
+                                style: GoogleFonts.quicksand(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: selected ? Colors.white : AppTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                r == EventRecurrence.none
+                                    ? 'Une fois'
+                                    : r == EventRecurrence.weekly
+                                        ? 'Hebdo'
+                                        : 'Mensuel',
+                                style: GoogleFonts.nunito(
+                                  fontSize: 11,
+                                  color: selected ? Colors.white70 : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              // ── Vacances scolaires (uniquement si récurrent) ──
+              if (_recurrence != EventRecurrence.none) ...[
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: SwitchListTile(
+                    value: !_excludeSchoolHolidays,
+                    onChanged: (v) =>
+                        setState(() => _excludeSchoolHolidays = !v),
+                    activeColor: AppTheme.primary,
+                    title: Text(
+                      'Pendant les vacances scolaires',
+                      style: GoogleFonts.nunito(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      _excludeSchoolHolidays
+                          ? 'Suspendu pendant les vacances (zone B)'
+                          : 'Maintenu pendant les vacances (zone B)',
+                      style: GoogleFonts.nunito(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 32),
 
               // Bouton sauvegarder
