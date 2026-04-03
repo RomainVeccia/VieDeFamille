@@ -526,7 +526,7 @@ class LemmingsGame {
 }
 
 // ============================================================
-// PAINTER
+// PAINTER — rendu haute qualité
 // ============================================================
 class LemmingsPainter extends CustomPainter {
   final LemmingsGame g;
@@ -536,225 +536,438 @@ class LemmingsPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final sx = size.width / LemmingsGame.W;
     final sy = size.height / LemmingsGame.H;
+    final c = canvas;
 
-    // Fond
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = const Color(0xFF000030));
+    // === FOND : dégradé ciel nocturne ===
+    c.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Color(0xFF000818), Color(0xFF001040), Color(0xFF002060)],
+        stops: [0.0, 0.5, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)));
 
-    // Étoiles
-    final sp = Paint();
-    for (int i = 0; i < 60; i++) {
+    // === LUNE ===
+    final moonX = size.width * 0.82, moonY = size.height * 0.12;
+    final moonR = 12 * sx;
+    // Halo
+    c.drawCircle(Offset(moonX, moonY), moonR * 2.5,
+      Paint()..color = const Color(0xFF334477).withValues(alpha: 0.15));
+    c.drawCircle(Offset(moonX, moonY), moonR * 1.5,
+      Paint()..color = const Color(0xFF556699).withValues(alpha: 0.2));
+    // Lune
+    c.drawCircle(Offset(moonX, moonY), moonR, Paint()..color = const Color(0xFFDDDDCC));
+    c.drawCircle(Offset(moonX, moonY), moonR,
+      Paint()..shader = RadialGradient(
+        center: const Alignment(-0.3, -0.3),
+        colors: [const Color(0xFFEEEEDD), const Color(0xFFBBBBAA)],
+      ).createShader(Rect.fromCircle(center: Offset(moonX, moonY), radius: moonR)));
+    // Cratères
+    c.drawCircle(Offset(moonX - moonR * 0.2, moonY + moonR * 0.1), moonR * 0.15,
+      Paint()..color = const Color(0xFFAAAA99));
+    c.drawCircle(Offset(moonX + moonR * 0.3, moonY - moonR * 0.2), moonR * 0.1,
+      Paint()..color = const Color(0xFFBBBBAA));
+
+    // === ÉTOILES scintillantes ===
+    for (int i = 0; i < 80; i++) {
       final stx = ((i * 97 + 31) % LemmingsGame.W).toDouble();
-      final sty = ((i * 53 + 17) % (g.waterLevel - 10)).toDouble();
-      final bri = 0.2 + 0.8 * ((sin(g.globalTime * 1.5 + i * 0.7) + 1) / 2);
-      sp.color = Color.fromRGBO(100, 130, 200, bri);
-      canvas.drawCircle(Offset(stx * sx, sty * sy), 0.5 * sx, sp);
+      final sty = ((i * 53 + 17) % (g.waterLevel - 15)).toDouble();
+      final bri = 0.15 + 0.85 * ((sin(g.globalTime * 1.2 + i * 0.9) + 1) / 2);
+      final starSize = (i % 3 == 0) ? 1.0 * sx : 0.5 * sx;
+      c.drawCircle(Offset(stx * sx, sty * sy), starSize,
+        Paint()..color = Color.fromRGBO(180, 200, 255, bri));
     }
 
-    // Eau animée
-    final waterY = g.waterLevel * sy;
-    // Vagues
-    final wavePath = Path()..moveTo(0, waterY);
-    for (double wx = 0; wx <= size.width; wx += 2) {
-      final wy = waterY + sin(wx / 15 + g.globalTime * 3) * 1.5 * sy;
-      wavePath.lineTo(wx, wy);
+    // === NUAGES translucides ===
+    for (int i = 0; i < 4; i++) {
+      final cx = ((i * 130 + 50 + g.globalTime * 3) % (LemmingsGame.W + 80) - 40) * sx;
+      final cy = (20 + i * 12) * sy;
+      final cw = (40 + i * 10) * sx;
+      final ch = (8 + i * 2) * sy;
+      c.drawOval(Rect.fromCenter(center: Offset(cx, cy), width: cw, height: ch),
+        Paint()..color = Color.fromRGBO(100, 120, 180, 0.06 + i * 0.02));
+      c.drawOval(Rect.fromCenter(center: Offset(cx + cw * 0.2, cy - ch * 0.3), width: cw * 0.6, height: ch * 0.7),
+        Paint()..color = Color.fromRGBO(100, 120, 180, 0.04 + i * 0.01));
     }
-    wavePath.lineTo(size.width, size.height);
-    wavePath.lineTo(0, size.height);
-    wavePath.close();
-    canvas.drawPath(wavePath, Paint()..color = const Color(0xFF1144AA));
-    // Reflets
-    canvas.drawPath(wavePath, Paint()
-      ..color = const Color(0xFF2266CC).withValues(alpha: 0.3)
-      ..style = PaintingStyle.stroke..strokeWidth = sy);
 
-    // Terrain
+    // === EAU avec reflets et vagues ===
+    final wy = g.waterLevel.toDouble() * sy;
+    // Eau profonde
+    c.drawRect(Rect.fromLTWH(0, wy, size.width, size.height - wy),
+      Paint()..shader = LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [const Color(0xFF0A2266), const Color(0xFF061544), const Color(0xFF030C22)],
+      ).createShader(Rect.fromLTWH(0, wy, size.width, size.height - wy)));
+    // Vagues (3 couches)
+    for (int layer = 0; layer < 3; layer++) {
+      final wp = Path()..moveTo(0, wy + layer * 1.5 * sy);
+      for (double wx = 0; wx <= size.width; wx += 1.5) {
+        final wwy = wy + layer * 1.5 * sy +
+          sin(wx / (12 + layer * 5) + g.globalTime * (2.5 - layer * 0.5)) * (1.5 + layer * 0.5) * sy;
+        wp.lineTo(wx, wwy);
+      }
+      wp.lineTo(size.width, size.height);
+      wp.lineTo(0, size.height);
+      wp.close();
+      c.drawPath(wp, Paint()..color = Color.fromRGBO(15, 40 + layer * 20, 120 + layer * 30, 0.5 - layer * 0.1));
+    }
+    // Reflet de la lune sur l'eau
+    for (int i = 0; i < 5; i++) {
+      final ry = wy + (3 + i * 2) * sy;
+      final rw = (8 - i) * sx;
+      c.drawLine(Offset(moonX - rw, ry), Offset(moonX + rw, ry),
+        Paint()..color = Color.fromRGBO(200, 200, 180, 0.1 - i * 0.015)..strokeWidth = sy * 0.8);
+    }
+
+    // === TERRAIN avec ombres/relief ===
+    // D'abord le terrain de base
     for (int y = 0; y < LemmingsGame.H; y++) {
       for (int x = 0; x < LemmingsGame.W; x++) {
         if (g.tg(x, y) == 0) continue;
-        canvas.drawRect(
-          Rect.fromLTWH(x * sx, y * sy, sx + 0.5, sy + 0.5),
+        c.drawRect(Rect.fromLTWH(x * sx, y * sy, sx + 0.5, sy + 0.5),
           Paint()..color = Color(g.terCol[y * LemmingsGame.W + x] | 0xFF000000));
       }
     }
-
-    // Particules
-    for (final p in g.particles) {
-      canvas.drawCircle(Offset(p.x * sx, p.y * sy), sx * 0.8,
-        Paint()..color = Color(p.color | 0xFF000000).withValues(alpha: p.life.clamp(0, 1)));
-    }
-
-    // Trappe
-    _trap(canvas, g.trapX * sx, g.trapY * sy, sx, sy);
-    // Sortie
-    _exit(canvas, g.exitX * sx, g.exitY * sy, sx, sy);
-
-    // Lemmings
-    for (final l in g.lems) {
-      if (l.exited || (!l.alive && l.state != LemS.splat)) continue;
-      _lem(canvas, l, sx, sy);
-    }
-
-    // Minimap
-    _minimap(canvas, size);
-  }
-
-  void _minimap(Canvas c, Size size) {
-    final mw = 80.0, mh = 36.0;
-    final mx = size.width - mw - 4, my = 4.0;
-    // Fond
-    c.drawRect(Rect.fromLTWH(mx, my, mw, mh),
-      Paint()..color = const Color(0xFF000030).withValues(alpha: 0.8));
-    c.drawRect(Rect.fromLTWH(mx, my, mw, mh),
-      Paint()..color = const Color(0xFF334488)..style = PaintingStyle.stroke..strokeWidth = 1);
-    // Terrain miniaturisé
-    final msx = mw / LemmingsGame.W, msy = mh / LemmingsGame.H;
-    for (int y = 0; y < LemmingsGame.H; y += 3) {
-      for (int x = 0; x < LemmingsGame.W; x += 3) {
-        if (g.tg(x, y) > 0) {
-          c.drawRect(Rect.fromLTWH(mx + x * msx, my + y * msy, msx * 3 + 0.5, msy * 3 + 0.5),
-            Paint()..color = Color(g.terCol[y * LemmingsGame.W + x] | 0xFF000000).withValues(alpha: 0.7));
+    // Ombres sous le terrain (bord inférieur exposé)
+    for (int x = 0; x < LemmingsGame.W; x++) {
+      for (int y = 0; y < LemmingsGame.H - 1; y++) {
+        if (g.tg(x, y) > 0 && g.tg(x, y + 1) == 0 && !g.isWater(x, y + 1)) {
+          c.drawRect(Rect.fromLTWH(x * sx, (y + 1) * sy, sx + 0.5, sy * 2),
+            Paint()..color = const Color(0xFF000000).withValues(alpha: 0.15));
         }
       }
     }
-    // Lemmings sur la minimap
+    // Highlights sur le bord supérieur
+    for (int x = 0; x < LemmingsGame.W; x++) {
+      for (int y = 1; y < LemmingsGame.H; y++) {
+        if (g.tg(x, y) > 0 && g.tg(x, y - 1) == 0) {
+          c.drawRect(Rect.fromLTWH(x * sx, y * sy, sx + 0.5, sy * 0.5),
+            Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.08));
+        }
+      }
+    }
+
+    // === PARTICULES ===
+    for (final p in g.particles) {
+      final alpha = p.life.clamp(0.0, 1.0);
+      c.drawCircle(Offset(p.x * sx, p.y * sy), sx * 1.0,
+        Paint()..color = Color(p.color | 0xFF000000).withValues(alpha: alpha));
+      // Traînée
+      c.drawCircle(Offset((p.x - p.vx * 0.01) * sx, (p.y - p.vy * 0.01) * sy), sx * 0.5,
+        Paint()..color = Color(p.color | 0xFF000000).withValues(alpha: alpha * 0.4));
+    }
+
+    // === TRAPPE ===
+    _trap(c, g.trapX * sx, g.trapY * sy, sx, sy);
+    // === SORTIE ===
+    _exit(c, g.exitX * sx, g.exitY * sy, sx, sy);
+
+    // === LEMMINGS ===
+    for (final l in g.lems) {
+      if (l.exited || (!l.alive && l.state != LemS.splat)) continue;
+      _lem(c, l, sx, sy);
+    }
+
+    // === MINIMAP ===
+    _minimap(c, size, sx, sy);
+  }
+
+  void _minimap(Canvas c, Size size, double sx, double sy) {
+    final mw = 90.0, mh = 40.0;
+    final mx = size.width - mw - 6, my = 6.0;
+    // Fond avec bordure
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(mx - 2, my - 2, mw + 4, mh + 4), const Radius.circular(4)),
+      Paint()..color = const Color(0xFF000020).withValues(alpha: 0.85));
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(mx - 2, my - 2, mw + 4, mh + 4), const Radius.circular(4)),
+      Paint()..color = const Color(0xFF335588)..style = PaintingStyle.stroke..strokeWidth = 1.5);
+    final msx = mw / LemmingsGame.W, msy = mh / LemmingsGame.H;
+    for (int y = 0; y < LemmingsGame.H; y += 2) {
+      for (int x = 0; x < LemmingsGame.W; x += 2) {
+        if (g.tg(x, y) > 0) {
+          c.drawRect(Rect.fromLTWH(mx + x * msx, my + y * msy, msx * 2 + 0.5, msy * 2 + 0.5),
+            Paint()..color = Color(g.terCol[y * LemmingsGame.W + x] | 0xFF000000).withValues(alpha: 0.8));
+        }
+      }
+    }
+    // Lemmings
     for (final l in g.lems) {
       if (!l.alive || l.exited) continue;
-      c.drawCircle(Offset(mx + l.x * msx, my + l.y * msy), 1,
+      c.drawCircle(Offset(mx + l.x * msx, my + l.y * msy), 1.2,
         Paint()..color = const Color(0xFF44FF44));
     }
-    // Eau minimap
+    // Eau
     c.drawRect(Rect.fromLTWH(mx, my + g.waterLevel * msy, mw, mh - g.waterLevel * msy),
       Paint()..color = const Color(0xFF1144AA).withValues(alpha: 0.5));
   }
 
   void _trap(Canvas c, double x, double y, double sx, double sy) {
-    final w = 20 * sx, h = 8 * sy;
+    final w = 22 * sx, h = 10 * sy;
+    // Ombre
+    c.drawRRect(RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(x + sx, y - h * 0.5 + sy), width: w, height: h), Radius.circular(sx * 2)),
+      Paint()..color = const Color(0xFF000000).withValues(alpha: 0.3));
+    // Corps métallique avec dégradé
     c.drawRRect(RRect.fromRectAndRadius(
       Rect.fromCenter(center: Offset(x, y - h * 0.5), width: w, height: h), Radius.circular(sx * 2)),
-      Paint()..color = const Color(0xFF6A6A9A));
-    for (final dx in [-w * 0.35, -w * 0.12, w * 0.12, w * 0.35]) {
-      c.drawCircle(Offset(x + dx, y - h * 0.5), sx * 0.7, Paint()..color = const Color(0xFF9999CC));
+      Paint()..shader = LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [const Color(0xFF8888BB), const Color(0xFF5555888), const Color(0xFF6666AA)],
+      ).createShader(Rect.fromCenter(center: Offset(x, y - h * 0.5), width: w, height: h)));
+    // Rivets
+    for (final dx in [-w * 0.38, -w * 0.15, w * 0.15, w * 0.38]) {
+      c.drawCircle(Offset(x + dx, y - h * 0.5), sx * 0.8, Paint()..color = const Color(0xFFAAAADD));
+      c.drawCircle(Offset(x + dx, y - h * 0.5), sx * 0.4, Paint()..color = const Color(0xFF7777AA));
     }
+    // Bande
+    c.drawRect(Rect.fromCenter(center: Offset(x, y - h * 0.5), width: w * 0.85, height: h * 0.12),
+      Paint()..color = const Color(0xFF444466));
+    // Porte
     if (g.trapOpen) {
-      c.drawRect(Rect.fromLTWH(x - 4 * sx, y - sy, 8 * sx, 5 * sy), Paint()..color = const Color(0xFF222244));
+      c.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(x - 5 * sx, y - sy, 10 * sx, 6 * sy), Radius.circular(sx)),
+        Paint()..color = const Color(0xFF181830));
+      // Lueur depuis la porte
+      c.drawCircle(Offset(x, y + 2 * sy), 3 * sx,
+        Paint()..color = const Color(0xFF6688AA).withValues(alpha: 0.2));
     }
   }
 
   void _exit(Canvas c, double x, double y, double sx, double sy) {
-    final w = 16 * sx, h = 18 * sy;
-    c.drawRect(Rect.fromLTWH(x - w / 2, y - h, 3 * sx, h), Paint()..color = const Color(0xFF1A1AAA));
-    c.drawRect(Rect.fromLTWH(x + w / 2 - 3 * sx, y - h, 3 * sx, h), Paint()..color = const Color(0xFF1A1AAA));
-    c.drawRect(Rect.fromLTWH(x - w / 2 + sx, y - h, sx, h), Paint()..color = const Color(0xFF3333CC));
+    final w = 18 * sx, h = 20 * sy;
+    // Ombre
+    c.drawRect(Rect.fromLTWH(x - w / 2 + sx, y - h + sy, w, h),
+      Paint()..color = const Color(0xFF000000).withValues(alpha: 0.2));
+    // Piliers avec dégradé
+    for (final dx in [-w / 2, w / 2 - 4 * sx]) {
+      c.drawRect(Rect.fromLTWH(x + dx, y - h, 4 * sx, h),
+        Paint()..shader = LinearGradient(
+          begin: Alignment.centerLeft, end: Alignment.centerRight,
+          colors: [const Color(0xFF1A1ABB), const Color(0xFF3333EE), const Color(0xFF1A1ABB)],
+        ).createShader(Rect.fromLTWH(x + dx, y - h, 4 * sx, h)));
+    }
+    // Arc supérieur
     c.drawArc(Rect.fromCenter(center: Offset(x, y - h), width: w, height: h * 0.5),
-      pi, pi, false, Paint()..color = const Color(0xFF4444FF)..style = PaintingStyle.stroke..strokeWidth = 3 * sx);
-    // Halo pulsant
-    final pulse = 0.3 + 0.15 * sin(g.globalTime * 4);
-    c.drawCircle(Offset(x, y - h * 0.5), 6 * sx, Paint()..color = Color.fromRGBO(68, 136, 255, pulse));
-    c.drawCircle(Offset(x, y - h * 0.5), 3 * sx, Paint()..color = Color.fromRGBO(136, 187, 255, pulse + 0.1));
+      pi, pi, false, Paint()..color = const Color(0xFF4455FF)..style = PaintingStyle.stroke..strokeWidth = 4 * sx);
+    // Halo pulsant multicouche
+    final pulse = 0.25 + 0.2 * sin(g.globalTime * 3);
+    c.drawCircle(Offset(x, y - h * 0.5), 8 * sx,
+      Paint()..color = Color.fromRGBO(60, 100, 255, pulse * 0.5));
+    c.drawCircle(Offset(x, y - h * 0.5), 5 * sx,
+      Paint()..color = Color.fromRGBO(100, 150, 255, pulse * 0.7));
+    c.drawCircle(Offset(x, y - h * 0.5), 2.5 * sx,
+      Paint()..color = Color.fromRGBO(180, 210, 255, pulse));
+    // Flèche
+    final ap = Paint()..color = Colors.white.withValues(alpha: 0.8)..strokeWidth = sx * 1.2..strokeCap = StrokeCap.round;
+    c.drawLine(Offset(x, y - 4 * sy), Offset(x, y - h + 5 * sy), ap);
+    c.drawLine(Offset(x - 4 * sx, y - h + 9 * sy), Offset(x, y - h + 5 * sy), ap);
+    c.drawLine(Offset(x + 4 * sx, y - h + 9 * sy), Offset(x, y - h + 5 * sy), ap);
   }
 
   void _lem(Canvas c, Lem l, double sx, double sy) {
     final x = l.x * sx, y = l.y * sy;
-    final lw = 2.5 * sx, lh = 5.5 * sy;
+    // Lemmings plus gros pour être bien visibles
+    final lw = 3.2 * sx;
+    final lh = 7.0 * sy;
+
+    // Ombre au sol
+    c.drawOval(Rect.fromCenter(center: Offset(x, y + sy), width: lw * 2, height: sy * 1.5),
+      Paint()..color = const Color(0xFF000000).withValues(alpha: 0.25));
 
     if (l.state == LemS.splat) {
-      c.drawOval(Rect.fromCenter(center: Offset(x, y), width: lw * 5, height: sy * 2),
+      // Splat avec particules
+      c.drawOval(Rect.fromCenter(center: Offset(x, y), width: lw * 6, height: sy * 3),
         Paint()..color = const Color(0xFF00BB00));
+      for (int i = 0; i < 6; i++) {
+        c.drawCircle(Offset(x + (i * 5 - 12) * sx, y - (i % 3) * sy),
+          sx * 0.7, Paint()..color = const Color(0xFF009900));
+      }
       return;
     }
 
-    const blue = Color(0xFF3333DD);
-    const green = Color(0xFF00EE00);
-    const skin = Color(0xFFFFBB77);
+    // Couleurs
+    const tunique = Color(0xFF2828CC);
+    const tuniqueLight = Color(0xFF4040EE);
+    const cheveux = Color(0xFF00DD00);
+    const cheveuxLight = Color(0xFF33FF33);
+    const peau = Color(0xFFFFBB77);
+    const peauLight = Color(0xFFFFCC99);
 
     final fr = l.fr.floor() % 8;
     final ws = sin(fr / 8 * pi * 2);
 
-    // Jambes
+    // === JAMBES avec pieds ===
     if (l.state == LemS.walk) {
       final lo = ws * lw * 0.7;
-      c.drawLine(Offset(x - lw * 0.2, y - lh * 0.15), Offset(x - lw * 0.3 + lo, y),
-        Paint()..color = blue..strokeWidth = sx * 1.3..strokeCap = StrokeCap.round);
-      c.drawLine(Offset(x + lw * 0.2, y - lh * 0.15), Offset(x + lw * 0.3 - lo, y),
-        Paint()..color = blue..strokeWidth = sx * 1.3..strokeCap = StrokeCap.round);
+      // Jambe gauche
+      c.drawLine(Offset(x - lw * 0.15, y - lh * 0.12), Offset(x - lw * 0.25 + lo, y - sy * 0.5),
+        Paint()..color = tunique..strokeWidth = sx * 1.6..strokeCap = StrokeCap.round);
+      // Pied gauche
+      c.drawOval(Rect.fromCenter(center: Offset(x - lw * 0.25 + lo, y), width: sx * 2.5, height: sy * 1.5),
+        Paint()..color = tunique);
+      // Jambe droite
+      c.drawLine(Offset(x + lw * 0.15, y - lh * 0.12), Offset(x + lw * 0.25 - lo, y - sy * 0.5),
+        Paint()..color = tunique..strokeWidth = sx * 1.6..strokeCap = StrokeCap.round);
+      // Pied droit
+      c.drawOval(Rect.fromCenter(center: Offset(x + lw * 0.25 - lo, y), width: sx * 2.5, height: sy * 1.5),
+        Paint()..color = tunique);
     } else {
-      c.drawRect(Rect.fromLTRB(x - lw * 0.5, y - lh * 0.15, x + lw * 0.5, y), Paint()..color = blue);
+      c.drawRect(Rect.fromLTRB(x - lw * 0.45, y - lh * 0.12, x + lw * 0.45, y), Paint()..color = tunique);
     }
 
-    // Corps
+    // === CORPS (tunique) ===
+    final bodyTop = y - lh * 0.72;
+    final bodyBot = y - lh * 0.1;
     c.drawRRect(RRect.fromRectAndRadius(
-      Rect.fromLTRB(x - lw, y - lh * 0.72, x + lw, y - lh * 0.12), Radius.circular(sx * 0.5)),
-      Paint()..color = blue);
-    c.drawRect(Rect.fromLTRB(x - lw * 0.3, y - lh * 0.7, x - lw * 0.1, y - lh * 0.2),
-      Paint()..color = const Color(0xFF4444EE));
+      Rect.fromLTRB(x - lw, bodyTop, x + lw, bodyBot), Radius.circular(sx)),
+      Paint()..color = tunique);
+    // Reflet
+    c.drawRect(Rect.fromLTRB(x - lw * 0.4, bodyTop + lh * 0.02, x - lw * 0.15, bodyBot - lh * 0.05),
+      Paint()..color = tuniqueLight);
+    // Ceinture
+    c.drawRect(Rect.fromLTRB(x - lw, bodyBot - lh * 0.06, x + lw, bodyBot - lh * 0.02),
+      Paint()..color = const Color(0xFF1A1A88));
 
-    // Tête
+    // === BRAS (au repos, balancement en marchant) ===
+    if (l.state == LemS.walk) {
+      final armSwing = ws * lw * 0.4;
+      c.drawLine(Offset(x - lw * 0.8, bodyTop + lh * 0.1),
+        Offset(x - lw * 1.2 - armSwing, bodyTop + lh * 0.25),
+        Paint()..color = peau..strokeWidth = sx * 1.0..strokeCap = StrokeCap.round);
+      c.drawLine(Offset(x + lw * 0.8, bodyTop + lh * 0.1),
+        Offset(x + lw * 1.2 + armSwing, bodyTop + lh * 0.25),
+        Paint()..color = peau..strokeWidth = sx * 1.0..strokeCap = StrokeCap.round);
+    }
+
+    // === TÊTE ===
     final headY = y - lh * 0.82;
-    c.drawCircle(Offset(x, headY), lw * 0.7, Paint()..color = skin);
+    final headR = lw * 0.75;
+    // Tête peau
+    c.drawCircle(Offset(x, headY), headR, Paint()..color = peau);
+    // Reflet joue
+    c.drawCircle(Offset(x - headR * 0.3, headY + headR * 0.1), headR * 0.25,
+      Paint()..color = peauLight.withValues(alpha: 0.5));
 
-    // Cheveux verts
+    // === CHEVEUX VERTS (épais, signature Lemmings) ===
     final hp = Path()
-      ..moveTo(x - lw * 0.9, headY - lw * 0.7 * 0.2)
-      ..quadraticBezierTo(x - lw * 0.5, headY - lh * 0.4, x, headY - lh * 0.35)
-      ..quadraticBezierTo(x + lw * 0.5, headY - lh * 0.4, x + lw * 0.9, headY - lw * 0.7 * 0.2)
-      ..quadraticBezierTo(x + lw * 0.2, headY - lh * 0.15, x, headY - lh * 0.12)
-      ..quadraticBezierTo(x - lw * 0.2, headY - lh * 0.15, x - lw * 0.9, headY - lw * 0.7 * 0.2)
+      ..moveTo(x - lw * 1.1, headY - headR * 0.1)
+      ..quadraticBezierTo(x - lw * 0.6, headY - lh * 0.48, x, headY - lh * 0.42)
+      ..quadraticBezierTo(x + lw * 0.6, headY - lh * 0.48, x + lw * 1.1, headY - headR * 0.1)
+      ..quadraticBezierTo(x + lw * 0.3, headY - lh * 0.2, x, headY - lh * 0.15)
+      ..quadraticBezierTo(x - lw * 0.3, headY - lh * 0.2, x - lw * 1.1, headY - headR * 0.1)
       ..close();
-    c.drawPath(hp, Paint()..color = green);
+    c.drawPath(hp, Paint()..color = cheveux);
+    // Mèches
+    c.drawPath(Path()
+      ..moveTo(x - lw * 0.5, headY - lh * 0.35)
+      ..quadraticBezierTo(x - lw * 0.3, headY - lh * 0.45, x - lw * 0.1, headY - lh * 0.38),
+      Paint()..color = cheveuxLight..style = PaintingStyle.stroke..strokeWidth = sx * 0.8);
+    c.drawPath(Path()
+      ..moveTo(x + lw * 0.1, headY - lh * 0.36)
+      ..quadraticBezierTo(x + lw * 0.4, headY - lh * 0.46, x + lw * 0.6, headY - lh * 0.35),
+      Paint()..color = cheveuxLight..style = PaintingStyle.stroke..strokeWidth = sx * 0.6);
 
-    // Yeux
-    final ex = x + l.dir * lw * 0.2;
-    c.drawCircle(Offset(ex, headY + lw * 0.7 * 0.1), sx * 0.5, Paint()..color = Colors.white);
-    c.drawCircle(Offset(ex + l.dir * sx * 0.15, headY + lw * 0.7 * 0.1), sx * 0.25, Paint()..color = Colors.black);
+    // === YEUX ===
+    final eyeX = x + l.dir * lw * 0.25;
+    c.drawOval(Rect.fromCenter(center: Offset(eyeX, headY + headR * 0.05), width: sx * 1.6, height: sy * 1.8),
+      Paint()..color = Colors.white);
+    c.drawCircle(Offset(eyeX + l.dir * sx * 0.2, headY + headR * 0.05), sx * 0.5,
+      Paint()..color = Colors.black);
+    // Reflet oeil
+    c.drawCircle(Offset(eyeX + l.dir * sx * 0.05, headY - sx * 0.1), sx * 0.2,
+      Paint()..color = Colors.white);
 
-    // Skills FX
+    // === NEZ (petit point) ===
+    c.drawCircle(Offset(x + l.dir * lw * 0.45, headY + headR * 0.3), sx * 0.3,
+      Paint()..color = const Color(0xFFEEAA66));
+
+    // === SKILLS FX ===
     if (l.state == LemS.block) {
-      final ap = Paint()..color = skin..strokeWidth = sx..strokeCap = StrokeCap.round;
-      c.drawLine(Offset(x, y - lh * 0.5), Offset(x - lw * 2.8, y - lh * 0.6), ap);
-      c.drawLine(Offset(x, y - lh * 0.5), Offset(x + lw * 2.8, y - lh * 0.6), ap);
-      c.drawCircle(Offset(x - lw * 2.8, y - lh * 0.6), sx, Paint()..color = skin);
-      c.drawCircle(Offset(x + lw * 2.8, y - lh * 0.6), sx, Paint()..color = skin);
+      final ap = Paint()..color = peau..strokeWidth = sx * 1.3..strokeCap = StrokeCap.round;
+      c.drawLine(Offset(x, bodyTop + lh * 0.1), Offset(x - lw * 3, bodyTop - lh * 0.05), ap);
+      c.drawLine(Offset(x, bodyTop + lh * 0.1), Offset(x + lw * 3, bodyTop - lh * 0.05), ap);
+      // Mains
+      c.drawCircle(Offset(x - lw * 3, bodyTop - lh * 0.05), sx * 1.3, Paint()..color = peau);
+      c.drawCircle(Offset(x + lw * 3, bodyTop - lh * 0.05), sx * 1.3, Paint()..color = peau);
     }
     if (l.state == LemS.float_) {
-      c.drawLine(Offset(x, headY - lh * 0.2), Offset(x, headY - lh * 0.6),
-        Paint()..color = const Color(0xFF663300)..strokeWidth = sx * 0.8);
-      final up = Path()..moveTo(x - lw * 3.5, headY - lh * 0.5)
-        ..quadraticBezierTo(x, headY - lh * 1.3, x + lw * 3.5, headY - lh * 0.5);
-      c.drawPath(up, Paint()..color = const Color(0xFFCC44CC)..style = PaintingStyle.stroke..strokeWidth = sx * 2);
+      // Manche
+      c.drawLine(Offset(x, headY - lh * 0.15), Offset(x, headY - lh * 0.7),
+        Paint()..color = const Color(0xFF663300)..strokeWidth = sx);
+      // Parapluie avec couleurs
+      final up = Path()..moveTo(x - lw * 4, headY - lh * 0.55)
+        ..quadraticBezierTo(x, headY - lh * 1.5, x + lw * 4, headY - lh * 0.55);
+      c.drawPath(up, Paint()..color = const Color(0xFFDD55DD)..style = PaintingStyle.stroke..strokeWidth = sx * 2.5);
+      // Remplissage semi-transparent
+      final upFill = Path()..moveTo(x - lw * 4, headY - lh * 0.55)
+        ..quadraticBezierTo(x, headY - lh * 1.5, x + lw * 4, headY - lh * 0.55)
+        ..lineTo(x, headY - lh * 0.7)..close();
+      c.drawPath(upFill, Paint()..color = const Color(0xFFDD55DD).withValues(alpha: 0.25));
     }
     if (l.state == LemS.build) {
       final ph = (l.fr * 2).floor() % 2;
-      final ax = x + l.dir * lw * 2.5, ay = y - lh * 0.5 - (ph == 0 ? lh * 0.1 : 0);
-      c.drawLine(Offset(x + l.dir * lw, y - lh * 0.5), Offset(ax, ay),
-        Paint()..color = skin..strokeWidth = sx..strokeCap = StrokeCap.round);
-      c.drawRect(Rect.fromCenter(center: Offset(ax, ay), width: 4 * sx, height: 2 * sy), Paint()..color = const Color(0xFFAA9977));
+      final ax = x + l.dir * lw * 2.8, ay = bodyTop + lh * 0.05 - (ph == 0 ? lh * 0.08 : 0);
+      c.drawLine(Offset(x + l.dir * lw, bodyTop + lh * 0.1), Offset(ax, ay),
+        Paint()..color = peau..strokeWidth = sx * 1.1..strokeCap = StrokeCap.round);
+      // Brique
+      c.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(ax, ay), width: 5 * sx, height: 3 * sy), Radius.circular(sx * 0.3)),
+        Paint()..color = const Color(0xFFBB9966));
+      c.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(ax, ay), width: 5 * sx, height: 3 * sy), Radius.circular(sx * 0.3)),
+        Paint()..color = const Color(0xFF997744)..style = PaintingStyle.stroke..strokeWidth = sx * 0.3);
     }
-    if (l.state == LemS.dig || l.state == LemS.mine) {
+    if (l.state == LemS.dig) {
       final ph = (l.fr * 3).floor() % 2;
-      c.drawLine(Offset(x + lw, y - lh * 0.5), Offset(x + lw * 2, y + (ph == 0 ? 0 : lh * 0.15)),
-        Paint()..color = Colors.grey..strokeWidth = sx..strokeCap = StrokeCap.round);
+      // Pioche
+      final pickEnd = Offset(x + l.dir * lw * 2, y + (ph == 0 ? -lh * 0.05 : lh * 0.15));
+      c.drawLine(Offset(x + l.dir * lw, bodyTop + lh * 0.15), pickEnd,
+        Paint()..color = const Color(0xFF886644)..strokeWidth = sx * 1.1..strokeCap = StrokeCap.round);
+      // Tête de pioche
+      c.drawLine(Offset(pickEnd.dx - l.dir * 2 * sx, pickEnd.dy - 2 * sy), Offset(pickEnd.dx + l.dir * 2 * sx, pickEnd.dy),
+        Paint()..color = const Color(0xFF999999)..strokeWidth = sx * 1.5..strokeCap = StrokeCap.round);
+    }
+    if (l.state == LemS.mine) {
+      final ph = (l.fr * 3).floor() % 2;
+      c.drawLine(Offset(x + l.dir * lw, bodyTop + lh * 0.15),
+        Offset(x + l.dir * lw * 3, y + (ph == 0 ? lh * 0.05 : lh * 0.2)),
+        Paint()..color = const Color(0xFF886644)..strokeWidth = sx * 1.1..strokeCap = StrokeCap.round);
     }
     if (l.state == LemS.bash) {
       final ph = (l.fr * 4).floor() % 2;
-      final fx = x + l.dir * (lw * 2.5 + (ph == 0 ? lw : 0));
-      c.drawLine(Offset(x + l.dir * lw, y - lh * 0.5), Offset(fx, y - lh * 0.5),
-        Paint()..color = skin..strokeWidth = sx * 1.2..strokeCap = StrokeCap.round);
+      final fx = x + l.dir * (lw * 3 + (ph == 0 ? lw : 0));
+      c.drawLine(Offset(x + l.dir * lw, bodyTop + lh * 0.1), Offset(fx, bodyTop + lh * 0.1),
+        Paint()..color = peau..strokeWidth = sx * 1.5..strokeCap = StrokeCap.round);
+      // Poing
+      c.drawCircle(Offset(fx, bodyTop + lh * 0.1), sx * 1.5, Paint()..color = peau);
     }
     if (l.state == LemS.climb) {
-      c.drawLine(Offset(x + l.dir * lw, y - lh * 0.7), Offset(x + l.dir * lw * 2, y - lh * 0.9),
-        Paint()..color = skin..strokeWidth = sx..strokeCap = StrokeCap.round);
+      c.drawLine(Offset(x + l.dir * lw, bodyTop), Offset(x + l.dir * lw * 2.2, bodyTop - lh * 0.15),
+        Paint()..color = peau..strokeWidth = sx * 1.1..strokeCap = StrokeCap.round);
+      c.drawLine(Offset(x + l.dir * lw, bodyTop + lh * 0.2), Offset(x + l.dir * lw * 2.2, bodyTop + lh * 0.15),
+        Paint()..color = peau..strokeWidth = sx * 1.1..strokeCap = StrokeCap.round);
     }
     if (l.state == LemS.bomb) {
       final blink = (l.bombT * 5).floor() % 2 == 0;
+      // Halo danger
+      c.drawCircle(Offset(x, y - lh * 0.4), lw * 2,
+        Paint()..color = Colors.red.withValues(alpha: blink ? 0.25 : 0.1));
+      // Compteur
       final tp = TextPainter(text: TextSpan(text: '${l.bombT.ceil()}',
-        style: TextStyle(color: blink ? Colors.red : Colors.white, fontSize: 5 * sx, fontWeight: FontWeight.bold)),
+        style: TextStyle(color: blink ? const Color(0xFFFF3333) : Colors.white,
+          fontSize: 6 * sx, fontWeight: FontWeight.bold,
+          shadows: [Shadow(color: Colors.black, blurRadius: 2 * sx)])),
         textDirection: TextDirection.ltr)..layout();
-      tp.paint(c, Offset(x - tp.width / 2, y - lh - 6 * sy));
-      if (blink) c.drawCircle(Offset(x, y - lh * 0.4), lw * 1.5, Paint()..color = Colors.red.withValues(alpha: 0.35));
+      tp.paint(c, Offset(x - tp.width / 2, y - lh - 7 * sy));
     }
-    if (l.pClimb) c.drawCircle(Offset(x - lw * 1.5, y - lh - 2 * sy), sx * 0.6, Paint()..color = Colors.cyan);
-    if (l.pFloat) c.drawCircle(Offset(x + lw * 1.5, y - lh - 2 * sy), sx * 0.6, Paint()..color = const Color(0xFFDD44DD));
+
+    // Badges permanents
+    if (l.pClimb) {
+      c.drawCircle(Offset(x - lw * 1.8, y - lh - 2 * sy), sx * 0.8, Paint()..color = const Color(0xFF00CCCC));
+      c.drawCircle(Offset(x - lw * 1.8, y - lh - 2 * sy), sx * 0.4, Paint()..color = Colors.white);
+    }
+    if (l.pFloat) {
+      c.drawCircle(Offset(x + lw * 1.8, y - lh - 2 * sy), sx * 0.8, Paint()..color = const Color(0xFFCC44CC));
+      c.drawCircle(Offset(x + lw * 1.8, y - lh - 2 * sy), sx * 0.4, Paint()..color = Colors.white);
+    }
   }
 
   @override
