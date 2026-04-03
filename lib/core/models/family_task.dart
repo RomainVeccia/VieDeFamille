@@ -4,7 +4,7 @@ enum TaskPriority { low, medium, high }
 
 enum TaskRecurrence { none, daily, weekly, monthly }
 
-enum TaskCategory { general, poules, chat, chambre, maison }
+enum TaskCategory { general, poules, chat, chambre, maison, enfants }
 
 /// Tâche familiale — assignable, cochable, avec points de gamification
 class FamilyTask {

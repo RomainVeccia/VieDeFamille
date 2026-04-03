@@ -19,7 +19,7 @@ class TaskTemplatesScreen extends ConsumerStatefulWidget {
 class _TaskTemplatesScreenState extends ConsumerState<TaskTemplatesScreen> {
   final Set<int> _selectedIndices = {};
   String? _assignedTo;
-  TaskCategory _currentCategory = TaskCategory.poules;
+  TaskCategory _currentCategory = TaskCategory.enfants;
 
   @override
   Widget build(BuildContext context) {

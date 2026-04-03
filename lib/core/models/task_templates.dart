@@ -310,8 +310,114 @@ class TaskTemplates {
     ),
   ];
 
+  // ===== TÂCHES ENFANTS ⭐ =====
+  static const enfantsDaily = [
+    TaskTemplate(
+      title: 'Ranger sa chambre',
+      emoji: '🛏️',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.daily,
+      pointsValue: 20,
+    ),
+    TaskTemplate(
+      title: 'Mettre la table',
+      emoji: '🍽️',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.daily,
+      pointsValue: 5,
+    ),
+    TaskTemplate(
+      title: 'Vider le lave-vaisselle',
+      emoji: '🫧',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.daily,
+      pointsValue: 10,
+    ),
+    TaskTemplate(
+      title: 'Débarrasser la table, tout rincer, mettre dans le lave-vaisselle, ranger au frigo, passer l\'éponge',
+      emoji: '✨',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.daily,
+      pointsValue: 30,
+    ),
+    TaskTemplate(
+      title: 'Sortir la poubelle',
+      emoji: '🗑️',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.daily,
+      pointsValue: 5,
+    ),
+  ];
+
+  static const enfantsWeekly = [
+    TaskTemplate(
+      title: 'Étendre le linge parfaitement',
+      emoji: '👕',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.weekly,
+      pointsValue: 15,
+    ),
+    TaskTemplate(
+      title: 'Plier le linge parfaitement et le ranger dans les placards',
+      emoji: '👔',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.weekly,
+      pointsValue: 30,
+    ),
+    TaskTemplate(
+      title: 'Nettoyer la salle de bain (en surface)',
+      emoji: '🚿',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.weekly,
+      pointsValue: 25,
+    ),
+    TaskTemplate(
+      title: 'Nettoyer la salle de bain (à fond)',
+      emoji: '🧽',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.weekly,
+      pointsValue: 50,
+    ),
+    TaskTemplate(
+      title: 'Passer l\'aspirateur (1 étage)',
+      emoji: '🧹',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.weekly,
+      pointsValue: 10,
+    ),
+    TaskTemplate(
+      title: 'Faire les poussières',
+      emoji: '✨',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.weekly,
+      pointsValue: 10,
+    ),
+    TaskTemplate(
+      title: 'Ranger le salon',
+      emoji: '🛋️',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.weekly,
+      pointsValue: 10,
+    ),
+    TaskTemplate(
+      title: 'Une tâche de jardinage',
+      emoji: '🌿',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.weekly,
+      pointsValue: 10,
+    ),
+    TaskTemplate(
+      title: 'Nettoyer la voiture',
+      emoji: '🚗',
+      category: TaskCategory.enfants,
+      recurrence: TaskRecurrence.weekly,
+      pointsValue: 10,
+    ),
+  ];
+
   /// Toutes les catégories avec leur label et icône
   static const categories = {
+    TaskCategory.enfants: ('Tâches Enfants', '⭐'),
     TaskCategory.poules: ('Les Poules', '🐔'),
     TaskCategory.chat: ('Le Chat', '🐱'),
     TaskCategory.chambre: ('Ma Chambre', '🛏️'),
@@ -329,6 +435,8 @@ class TaskTemplates {
         return [...chambreDaily, ...chambreWeekly, ...chambreMonthly];
       case TaskCategory.maison:
         return [...maisonDaily, ...maisonWeekly];
+      case TaskCategory.enfants:
+        return [...enfantsDaily, ...enfantsWeekly];
       case TaskCategory.general:
         return [];
     }
