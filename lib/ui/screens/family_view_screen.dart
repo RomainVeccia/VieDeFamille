@@ -48,36 +48,15 @@ class FamilyViewScreen extends ConsumerWidget {
               ),
             )
           : Padding(
-              padding: const EdgeInsets.all(12),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Adapter la grille pour tout voir sans scroller
-                  final cols = members.length <= 4 ? 2 : 3;
-                  final rows = (members.length / cols).ceil();
-                  const spacing = 8.0;
-                  final availH = constraints.maxHeight - (rows - 1) * spacing;
-                  final availW = constraints.maxWidth - (cols - 1) * spacing;
-                  final cardW = availW / cols;
-                  final cardH = availH / rows;
-                  final ratio = cardW / cardH;
-
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: cols,
-                      mainAxisSpacing: spacing,
-                      crossAxisSpacing: spacing,
-                      childAspectRatio: ratio.clamp(0.8, 2.0),
-                    ),
-                    itemCount: members.length,
-                    itemBuilder: (context, index) {
-                      final member = members[index];
-                      final color = AppTheme.memberColors[
-                          member.colorIndex % AppTheme.memberColors.length];
-                      final compact = cardH < 120;
-
-                      return GestureDetector(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              child: Row(
+                children: members.map((member) {
+                  final color = AppTheme.memberColors[
+                      member.colorIndex % AppTheme.memberColors.length];
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: GestureDetector(
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) =>
@@ -86,47 +65,44 @@ class FamilyViewScreen extends ConsumerWidget {
                         ),
                         child: Card(
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(12),
                             side: BorderSide(color: color, width: 2),
                           ),
                           child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 6, vertical: compact ? 4 : 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 8),
                             child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                MemberAvatar(
-                                    member: member,
-                                    size: compact ? 32 : 40),
-                                SizedBox(height: compact ? 3 : 5),
+                                MemberAvatar(member: member, size: 36),
+                                const SizedBox(height: 4),
                                 Text(
                                   member.name,
                                   style: GoogleFonts.quicksand(
-                                    fontSize: compact ? 13 : 15,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 Text(
-                                  '${member.status} · ${member.age} ans',
+                                  member.status,
                                   style: GoogleFonts.nunito(
-                                    fontSize: compact ? 10 : 12,
+                                    fontSize: 10,
                                     color: AppTheme.textSecondary,
                                   ),
                                 ),
-                                SizedBox(height: compact ? 2 : 4),
+                                const SizedBox(height: 3),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 1),
+                                      horizontal: 5, vertical: 1),
                                   decoration: BoxDecoration(
                                     color: color.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
                                     '${member.points} pts',
                                     style: GoogleFonts.nunito(
-                                      fontSize: compact ? 10 : 11,
+                                      fontSize: 9,
                                       fontWeight: FontWeight.w600,
                                       color: color,
                                     ),
@@ -136,10 +112,10 @@ class FamilyViewScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
-                      );
-                    },
+                      ),
+                    ),
                   );
-                },
+                }).toList(),
               ),
             ),
       floatingActionButton: FloatingActionButton(
