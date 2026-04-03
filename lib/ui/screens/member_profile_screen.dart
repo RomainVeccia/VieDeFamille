@@ -29,6 +29,7 @@ class MemberProfileScreen extends ConsumerWidget {
     final allTasks = ref.watch(tasksProvider);
     final memberTasks = TaskService.forMember(allTasks, liveMember.id);
     final pendingTasks = memberTasks.where((t) => !t.completed).toList();
+    final completedTasks = memberTasks.where((t) => t.completed).toList();
 
     // Messages et requêtes reçus par ce membre
     final memberMessages = ref.watch(messagesForMemberProvider(liveMember.id));
@@ -253,14 +254,16 @@ class MemberProfileScreen extends ConsumerWidget {
               const SizedBox(height: 24),
             ],
 
-            // === Section tâches assignées ===
-            _sectionTitle('Tâches assignées', Icons.check_circle_outline),
+            // === Section tâches à faire ===
+            _sectionTitle(
+                'Tâches à faire (${pendingTasks.length})',
+                Icons.check_circle_outline),
             const SizedBox(height: 8),
             if (pendingTasks.isEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'Aucune tâche en cours',
+                  'Aucune tâche en cours 🎉',
                   style: GoogleFonts.nunito(color: AppTheme.textSecondary),
                 ),
               )
@@ -271,6 +274,24 @@ class MemberProfileScreen extends ConsumerWidget {
                     onToggle: (_) =>
                         ref.read(tasksProvider.notifier).toggle(task.id),
                   )),
+
+            // === Section tâches terminées ===
+            if (completedTasks.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _sectionTitle(
+                  'Terminées (${completedTasks.length})',
+                  Icons.task_alt),
+              const SizedBox(height: 8),
+              ...completedTasks.map((task) => Opacity(
+                    opacity: 0.6,
+                    child: TaskCard(
+                      task: task,
+                      assignee: liveMember,
+                      onToggle: (_) =>
+                          ref.read(tasksProvider.notifier).toggle(task.id),
+                    ),
+                  )),
+            ],
           ],
         ),
       ),
