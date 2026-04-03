@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:vie_de_famille/core/models/family_message.dart';
 import 'package:vie_de_famille/core/models/member.dart';
@@ -62,8 +63,30 @@ class MemberProfileScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Header — avatar + infos
-            MemberAvatar(member: liveMember, size: 96),
+            // Header — avatar + bouton photo
+            GestureDetector(
+              onTap: () => _pickPhoto(context, ref, liveMember),
+              child: Stack(
+                children: [
+                  MemberAvatar(member: liveMember, size: 96),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: AppTheme.background, width: 2),
+                      ),
+                      child: const Icon(Icons.camera_alt,
+                          color: Colors.white, size: 16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 12),
             Text(
               liveMember.name,
@@ -310,6 +333,22 @@ class MemberProfileScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Choisir une photo de profil depuis la galerie
+  void _pickPhoto(
+      BuildContext context, WidgetRef ref, Member member) async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 80,
+    );
+    if (image != null) {
+      final updated = member.copyWith(photoPath: image.path);
+      ref.read(membersProvider.notifier).update(updated);
+    }
   }
 
   /// Dialogue pour envoyer un message ou une requête

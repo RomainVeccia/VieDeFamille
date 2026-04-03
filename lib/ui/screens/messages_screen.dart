@@ -67,6 +67,7 @@ class MessagesScreen extends ConsumerWidget {
               ],
             ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'addMessage',
         onPressed: () => _showNewMessageSheet(context, ref),
         child: const Icon(Icons.add),
       ),

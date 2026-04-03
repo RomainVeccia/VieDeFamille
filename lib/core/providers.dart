@@ -4,6 +4,7 @@ import 'package:vie_de_famille/core/models/family_task.dart';
 import 'package:vie_de_famille/core/models/family_message.dart';
 import 'package:vie_de_famille/core/models/family_event.dart';
 import 'package:vie_de_famille/core/models/reward.dart';
+import 'package:vie_de_famille/core/models/game_score.dart';
 import 'package:vie_de_famille/core/services/task_service.dart';
 import 'package:vie_de_famille/data/local/storage_service.dart';
 
@@ -275,4 +276,25 @@ final rewardsProvider =
     StateNotifierProvider<RewardsNotifier, List<Reward>>((ref) {
   final storage = ref.watch(storageServiceProvider);
   return RewardsNotifier(storage);
+});
+
+// ============================================================
+// SCORES DE JEUX
+// ============================================================
+class GameScoresNotifier extends StateNotifier<List<GameScore>> {
+  final StorageService? _storage;
+
+  GameScoresNotifier(this._storage)
+      : super(_storage?.getGameScores() ?? []);
+
+  Future<void> add(GameScore score) async {
+    state = [...state, score];
+    await _storage?.saveGameScores(state);
+  }
+}
+
+final gameScoresProvider =
+    StateNotifierProvider<GameScoresNotifier, List<GameScore>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return GameScoresNotifier(storage);
 });

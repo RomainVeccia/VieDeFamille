@@ -181,6 +181,7 @@ class RewardsScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'addReward',
         onPressed: () => _showAddReward(context, ref),
         child: const Icon(Icons.add),
       ),

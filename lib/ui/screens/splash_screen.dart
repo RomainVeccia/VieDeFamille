@@ -22,7 +22,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   Future<void> _init() async {
     // Attendre l'animation
-    await Future.delayed(const Duration(milliseconds: 2000));
+    await Future.delayed(const Duration(milliseconds: 800));
 
     if (!mounted) return;
 

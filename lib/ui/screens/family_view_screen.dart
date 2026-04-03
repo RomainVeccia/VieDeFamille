@@ -47,89 +47,88 @@ class FamilyViewScreen extends ConsumerWidget {
                 ],
               ),
             )
-          : GridView.builder(
+          : Padding(
               padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.85,
-              ),
-              itemCount: members.length,
-              itemBuilder: (context, index) {
-                final member = members[index];
-                final color = AppTheme.memberColors[
-                    member.colorIndex % AppTheme.memberColors.length];
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  // Ratio adaptatif : max 2 lignes visibles
+                  childAspectRatio: members.length <= 4 ? 1.3 : 1.1,
+                ),
+                itemCount: members.length,
+                itemBuilder: (context, index) {
+                  final member = members[index];
+                  final color = AppTheme.memberColors[
+                      member.colorIndex % AppTheme.memberColors.length];
 
-                return GestureDetector(
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          MemberProfileScreen(member: member),
-                    ),
-                  ),
-                  child: Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: color, width: 2),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          MemberAvatar(member: member, size: 64),
-                          const SizedBox(height: 8),
-                          Text(
-                            member.name,
-                            style: GoogleFonts.quicksand(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            member.status,
-                            style: GoogleFonts.nunito(
-                              fontSize: 13,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${member.age} ans',
-                            style: GoogleFonts.nunito(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          // Badge points
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${member.points} pts',
-                              style: GoogleFonts.nunito(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: color,
-                              ),
-                            ),
-                          ),
-                        ],
+                  return GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            MemberProfileScreen(member: member),
                       ),
                     ),
-                  ),
-                );
-              },
+                    child: Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: color, width: 2),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 10),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            MemberAvatar(member: member, size: 44),
+                            const SizedBox(height: 6),
+                            Text(
+                              member.name,
+                              style: GoogleFonts.quicksand(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '${member.status} · ${member.age} ans',
+                              style: GoogleFonts.nunito(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            // Badge points
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${member.points} pts',
+                                style: GoogleFonts.nunito(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: color,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'addMember',
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const AddMemberScreen()),
         ),

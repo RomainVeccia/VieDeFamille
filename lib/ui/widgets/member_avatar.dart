@@ -1,10 +1,12 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vie_de_famille/core/models/avatars.dart';
 import 'package:vie_de_famille/core/models/member.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 
-/// Avatar d'un membre — emoji dans un cercle coloré
+/// Avatar d'un membre — photo si dispo, sinon emoji dans un cercle coloré
 class MemberAvatar extends StatelessWidget {
   final Member member;
   final double size;
@@ -25,6 +27,7 @@ class MemberAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = AppTheme.memberColors[
         member.colorIndex % AppTheme.memberColors.length];
+    final hasPhoto = member.photoPath != null && member.photoPath!.isNotEmpty;
 
     return GestureDetector(
       onTap: onTap,
@@ -39,12 +42,15 @@ class MemberAvatar extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: color, width: 2.5),
             ),
-            child: Center(
-              child: Text(
-                FamilyAvatars.get(member.avatarIndex),
-                style: TextStyle(fontSize: size * 0.45),
-              ),
-            ),
+            clipBehavior: Clip.antiAlias,
+            child: hasPhoto
+                ? _buildPhoto()
+                : Center(
+                    child: Text(
+                      FamilyAvatars.get(member.avatarIndex),
+                      style: TextStyle(fontSize: size * 0.45),
+                    ),
+                  ),
           ),
           if (showName) ...[
             const SizedBox(height: 4),
@@ -69,6 +75,37 @@ class MemberAvatar extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildPhoto() {
+    if (kIsWeb) {
+      // Sur le web, les chemins locaux ne marchent pas via File
+      // On utilise Image.network pour les data URIs ou URLs
+      return Image.network(
+        member.photoPath!,
+        fit: BoxFit.cover,
+        width: size,
+        height: size,
+        errorBuilder: (_, _, _) => Center(
+          child: Text(
+            FamilyAvatars.get(member.avatarIndex),
+            style: TextStyle(fontSize: size * 0.45),
+          ),
+        ),
+      );
+    }
+    return Image.file(
+      File(member.photoPath!),
+      fit: BoxFit.cover,
+      width: size,
+      height: size,
+      errorBuilder: (_, _, _) => Center(
+        child: Text(
+          FamilyAvatars.get(member.avatarIndex),
+          style: TextStyle(fontSize: size * 0.45),
+        ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:vie_de_famille/core/models/family_task.dart';
 import 'package:vie_de_famille/core/models/family_message.dart';
 import 'package:vie_de_famille/core/models/family_event.dart';
 import 'package:vie_de_famille/core/models/reward.dart';
+import 'package:vie_de_famille/core/models/game_score.dart';
 
 /// Service de stockage local — SharedPreferences + JSON
 class StorageService {
@@ -13,6 +14,7 @@ class StorageService {
   static const _messagesKey = 'vdf_messages';
   static const _eventsKey = 'vdf_events';
   static const _rewardsKey = 'vdf_rewards';
+  static const _gameScoresKey = 'vdf_game_scores';
   static const _currentMemberKey = 'vdf_current_member';
 
   // Singleton
@@ -21,12 +23,66 @@ class StorageService {
 
   StorageService._();
 
+  static const _seededKey = 'vdf_seeded';
+
   static Future<StorageService> getInstance() async {
     if (_instance != null) return _instance!;
     final service = StorageService._();
     service._prefs = await SharedPreferences.getInstance();
     _instance = service;
+
+    // Seed les membres de la famille au premier lancement
+    if (!service._prefs.containsKey(_seededKey)) {
+      await service._seedDefaultMembers();
+      await service._prefs.setBool(_seededKey, true);
+    }
+
     return service;
+  }
+
+  /// Pré-enregistre les membres de la famille Veccia
+  Future<void> _seedDefaultMembers() async {
+    final now = DateTime.now();
+    final members = [
+      Member(
+        id: 'romain',
+        name: 'Romain',
+        avatarIndex: 0, // 👨
+        status: 'Papa',
+        birthday: DateTime(1990, 1, 1),
+        colorIndex: 0,
+        createdAt: now,
+      ),
+      Member(
+        id: 'joanne',
+        name: 'Joanne',
+        avatarIndex: 1, // 👩
+        status: 'Maman',
+        birthday: DateTime(1990, 1, 1),
+        colorIndex: 1,
+        createdAt: now,
+      ),
+      Member(
+        id: 'thea',
+        name: 'Théa',
+        avatarIndex: 3, // 👧
+        status: 'Sœur',
+        birthday: DateTime(2015, 1, 1),
+        colorIndex: 2,
+        createdAt: now,
+      ),
+      Member(
+        id: 'lucas',
+        name: 'Lucas',
+        avatarIndex: 2, // 👦
+        status: 'Frère',
+        birthday: DateTime(2017, 1, 1),
+        colorIndex: 3,
+        createdAt: now,
+      ),
+    ];
+    await saveMembers(members);
+    await setCurrentMemberId('romain');
   }
 
   // --- Members ---
@@ -102,6 +158,21 @@ class StorageService {
   Future<void> saveRewards(List<Reward> rewards) async {
     final json = jsonEncode(rewards.map((r) => r.toJson()).toList());
     await _prefs.setString(_rewardsKey, json);
+  }
+
+  // --- Game Scores ---
+  List<GameScore> getGameScores() {
+    final json = _prefs.getString(_gameScoresKey);
+    if (json == null) return [];
+    final list = jsonDecode(json) as List<dynamic>;
+    return list
+        .map((e) => GameScore.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveGameScores(List<GameScore> scores) async {
+    final json = jsonEncode(scores.map((s) => s.toJson()).toList());
+    await _prefs.setString(_gameScoresKey, json);
   }
 
   // --- Current Member ---

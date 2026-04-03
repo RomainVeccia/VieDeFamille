@@ -11,6 +11,8 @@ import 'package:vie_de_famille/ui/screens/tasks_screen.dart';
 import 'package:vie_de_famille/ui/screens/calendar_screen.dart';
 import 'package:vie_de_famille/ui/screens/messages_screen.dart';
 import 'package:vie_de_famille/ui/screens/rewards_screen.dart';
+import 'package:vie_de_famille/ui/screens/game_selection_screen.dart';
+import 'package:vie_de_famille/ui/screens/leaderboard_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 import 'package:vie_de_famille/ui/widgets/member_avatar.dart';
 
@@ -131,49 +133,10 @@ class _DashboardTab extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
 
-            // Si pas de membres → message de bienvenue
-            if (members.isEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.family_restroom,
-                        size: 64,
-                        color: AppTheme.primary,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Commencez par ajouter\nles membres de votre famille',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.quicksand(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton.icon(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const AddMemberScreen(),
-                          ),
-                        ),
-                        icon: const Icon(Icons.person_add),
-                        label: const Text('Ajouter un membre'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-
             // Avatars famille + bouton ajouter
             if (members.isNotEmpty) ...[
               SizedBox(
-                height: 80,
+                height: 95,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: members.length + 1,
@@ -230,9 +193,26 @@ class _DashboardTab extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 24),
+            ],
 
-              // === GRANDS BOUTONS D'ACCÈS RAPIDE ===
-              // Première ligne : 3 boutons
+            // Bouton ajouter un membre si aucun membre
+            if (members.isEmpty) ...[
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AddMemberScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.person_add),
+                label: const Text('Ajouter un membre'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // === GRANDS BOUTONS D'ACCÈS RAPIDE ===
               Row(
                 children: [
                   Expanded(
@@ -260,7 +240,7 @@ class _DashboardTab extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
               // Deuxième ligne : 3 boutons
               Row(
@@ -290,7 +270,7 @@ class _DashboardTab extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
               // Troisième ligne : Récompenses + Statistiques
               Row(
@@ -321,7 +301,38 @@ class _DashboardTab extends ConsumerWidget {
                   ),
                 ],
               ),
-            ],
+              const SizedBox(height: 10),
+
+              // Quatrième ligne : Chance du jour + Classement
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.casino,
+                      title: 'Chance du jour',
+                      subtitle: 'Jouer !',
+                      color: const Color(0xFFE91E63),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const GameSelectionScreen()),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.leaderboard,
+                      title: 'Classement',
+                      subtitle: 'Scores jeux',
+                      color: const Color(0xFF00BCD4),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const LeaderboardScreen()),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -366,25 +377,25 @@ class _DashboardTab extends ConsumerWidget {
               ],
             ),
           ),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color, size: 26),
+                child: Icon(icon, color: color, size: 22),
               ),
-              const Spacer(),
+              const SizedBox(height: 8),
               Text(
                 title,
                 style: GoogleFonts.quicksand(
-                  fontSize: 18,
+                  fontSize: 15,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
                 ),
@@ -393,7 +404,7 @@ class _DashboardTab extends ConsumerWidget {
               Text(
                 subtitle,
                 style: GoogleFonts.nunito(
-                  fontSize: 13,
+                  fontSize: 12,
                   color: AppTheme.textSecondary,
                 ),
               ),

@@ -209,6 +209,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'addEvent',
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const AddEventScreen()),
         ),

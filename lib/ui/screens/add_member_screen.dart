@@ -1,6 +1,9 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:vie_de_famille/core/models/avatars.dart';
 import 'package:vie_de_famille/core/models/member.dart';
@@ -23,12 +26,26 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
   DateTime? _birthday;
   int _avatarIndex = 0;
   int _colorIndex = 0;
+  String? _photoPath;
 
   @override
   void dispose() {
     _nameController.dispose();
     _statusController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhoto() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 80,
+    );
+    if (image != null) {
+      setState(() => _photoPath = image.path);
+    }
   }
 
   Future<void> _pickBirthday() async {
@@ -56,6 +73,7 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
       birthday: _birthday!,
       avatarIndex: _avatarIndex,
       colorIndex: _colorIndex,
+      photoPath: _photoPath,
     );
 
     await ref.read(membersProvider.notifier).add(member);
@@ -159,9 +177,71 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Avatar — grille d'emojis
+              // Photo de profil
               Text(
-                'Avatar',
+                'Photo',
+                style: GoogleFonts.nunito(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: GestureDetector(
+                  onTap: _pickPhoto,
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 48,
+                        backgroundColor:
+                            AppTheme.primary.withValues(alpha: 0.15),
+                        backgroundImage: _photoPath != null
+                            ? (kIsWeb
+                                    ? NetworkImage(_photoPath!)
+                                    : FileImage(File(_photoPath!)))
+                                as ImageProvider
+                            : null,
+                        child: _photoPath == null
+                            ? Text(
+                                FamilyAvatars.get(_avatarIndex),
+                                style: const TextStyle(fontSize: 40),
+                              )
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: AppTheme.background, width: 2),
+                          ),
+                          child: const Icon(Icons.camera_alt,
+                              color: Colors.white, size: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_photoPath != null)
+                Center(
+                  child: TextButton(
+                    onPressed: () => setState(() => _photoPath = null),
+                    child: Text(
+                      'Supprimer la photo',
+                      style: GoogleFonts.nunito(color: AppTheme.error),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
+
+              // Avatar emoji (fallback si pas de photo)
+              Text(
+                'Ou choisir un avatar',
                 style: GoogleFonts.nunito(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
