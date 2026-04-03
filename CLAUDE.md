@@ -1,6 +1,7 @@
 # CLAUDE.md — VieDeFamille
 
-> **Ordre de lecture** : CLAUDE.md → DATAONME.md → AGENTS.md → WORKFLOWS.md → SKILLS.md → tasks/lessons.md → tasks/todo.md
+> **Règles universelles** : Lire d'abord `../brain/BRAIN.md` puis ce fichier.
+> **Ordre de lecture** : ../brain/BRAIN.md → CLAUDE.md → DATAONME.md → AGENTS.md → WORKFLOWS.md → SKILLS.md → tasks/lessons.md → tasks/todo.md
 > **Version LITE** : CLAUDE_LITE.md (tâches simples)
 
 ---
