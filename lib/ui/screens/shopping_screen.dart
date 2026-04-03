@@ -281,14 +281,15 @@ class _ShoppingListDetailState extends ConsumerState<_ShoppingListDetail> {
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(shoppingItemsProvider);
-    final listItems = ShoppingService.forList(items, widget.list.id)
-      ..sort((a, b) {
-        if (a.checked == b.checked) return a.category.index.compareTo(b.category.index);
-        return a.checked ? 1 : -1;
-      });
+    final listItems = ShoppingService.forList(items, widget.list.id);
 
-    final pending = listItems.where((i) => !i.checked).length;
+    final toGet = listItems.where((i) => !i.checked).toList()
+      ..sort((a, b) => a.category.index.compareTo(b.category.index));
+    final inCart = listItems.where((i) => i.checked).toList()
+      ..sort((a, b) => a.category.index.compareTo(b.category.index));
+
     final total = listItems.length;
+    final done = inCart.length;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -296,10 +297,10 @@ class _ShoppingListDetailState extends ConsumerState<_ShoppingListDetail> {
         title: Text(widget.list.name,
             style: GoogleFonts.quicksand(fontWeight: FontWeight.bold)),
         actions: [
-          if (total > 0)
+          if (inCart.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: 'Tout décocher',
+              tooltip: 'Tout remettre dans la liste',
               onPressed: () =>
                   ref.read(shoppingItemsProvider.notifier).uncheckAll(widget.list.id),
             ),
@@ -310,28 +311,25 @@ class _ShoppingListDetailState extends ConsumerState<_ShoppingListDetail> {
           // Barre de progression
           if (total > 0)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Row(
                 children: [
                   Expanded(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
-                        value: total > 0 ? (total - pending) / total : 0,
+                        value: total > 0 ? done / total : 0,
                         minHeight: 8,
                         backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                        valueColor:
-                            AlwaysStoppedAnimation(pending == 0 ? AppTheme.success : AppTheme.primary),
+                        valueColor: AlwaysStoppedAnimation(
+                            done == total ? AppTheme.success : AppTheme.primary),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    '$pending restant${pending > 1 ? 's' : ''}',
-                    style: GoogleFonts.nunito(
-                      color: AppTheme.textSecondary,
-                      fontSize: 13,
-                    ),
+                    toGet.isEmpty ? 'Tout dans le caddie !' : '${toGet.length} restant${toGet.length > 1 ? 's' : ''}',
+                    style: GoogleFonts.nunito(color: AppTheme.textSecondary, fontSize: 13),
                   ),
                 ],
               ),
@@ -351,10 +349,31 @@ class _ShoppingListDetailState extends ConsumerState<_ShoppingListDetail> {
                       ],
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: listItems.length,
-                    itemBuilder: (ctx, i) => _ItemTile(item: listItems[i]),
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 80),
+                    children: [
+                      // ── Zone 1 : À acheter ──
+                      if (toGet.isNotEmpty) ...[
+                        _SectionHeader(
+                          label: 'À acheter',
+                          count: toGet.length,
+                          color: AppTheme.primary,
+                        ),
+                        ...toGet.map((item) => _ToGetTile(item: item)),
+                      ],
+
+                      // ── Zone 2 : Dans le caddie ──
+                      if (inCart.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _SectionHeader(
+                          label: 'Dans le caddie',
+                          count: inCart.length,
+                          color: AppTheme.success,
+                          icon: Icons.shopping_cart,
+                        ),
+                        ...inCart.map((item) => _InCartTile(item: item)),
+                      ],
+                    ],
                   ),
           ),
         ],
@@ -375,38 +394,75 @@ class _ShoppingListDetailState extends ConsumerState<_ShoppingListDetail> {
   }
 }
 
-class _ItemTile extends ConsumerWidget {
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final IconData icon;
+
+  const _SectionHeader({
+    required this.label,
+    required this.count,
+    required this.color,
+    this.icon = Icons.check_box_outline_blank,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.quicksand(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$count',
+              style: GoogleFonts.nunito(fontSize: 12, color: color, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Article à acheter — case à cocher vide, tap = passe dans le caddie
+class _ToGetTile extends ConsumerWidget {
   final ShoppingItem item;
-  const _ItemTile({required this.item});
+  const _ToGetTile({required this.item});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.symmetric(vertical: 3),
       child: ListTile(
+        onTap: () => ref.read(shoppingItemsProvider.notifier).toggle(item.id),
         leading: GestureDetector(
           onTap: () => ref.read(shoppingItemsProvider.notifier).toggle(item.id),
           child: Container(
-            width: 36,
-            height: 36,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(
-              color: item.checked
-                  ? AppTheme.success.withValues(alpha: 0.15)
-                  : AppTheme.background,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: item.checked ? AppTheme.success : AppTheme.textSecondary,
-                width: 2,
-              ),
+              shape: BoxShape.rectangle,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppTheme.primary, width: 2),
+              color: Colors.transparent,
             ),
-            child: item.checked
-                ? const Icon(Icons.check, color: AppTheme.success, size: 20)
-                : Center(
-                    child: Text(
-                      item.category.emoji,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ),
           ),
         ),
         title: Text(
@@ -414,24 +470,74 @@ class _ItemTile extends ConsumerWidget {
           style: GoogleFonts.nunito(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: item.checked ? AppTheme.textSecondary : AppTheme.textPrimary,
-            decoration: item.checked ? TextDecoration.lineThrough : null,
+            color: AppTheme.textPrimary,
           ),
         ),
-        subtitle: item.quantity != null
-            ? Text(
-                '${item.category.emoji} ${item.category.label}  ·  ${item.quantity}',
-                style: GoogleFonts.nunito(fontSize: 12, color: AppTheme.textSecondary),
-              )
-            : Text(
-                '${item.category.emoji} ${item.category.label}',
-                style: GoogleFonts.nunito(fontSize: 12, color: AppTheme.textSecondary),
-              ),
+        subtitle: Text(
+          item.quantity != null
+              ? '${item.category.emoji} ${item.category.label}  ·  ${item.quantity}'
+              : '${item.category.emoji} ${item.category.label}',
+          style: GoogleFonts.nunito(fontSize: 12, color: AppTheme.textSecondary),
+        ),
         trailing: IconButton(
           icon: const Icon(Icons.close, size: 18, color: AppTheme.textSecondary),
           onPressed: () => ref.read(shoppingItemsProvider.notifier).remove(item.id),
+          visualDensity: VisualDensity.compact,
         ),
-        onTap: () => ref.read(shoppingItemsProvider.notifier).toggle(item.id),
+      ),
+    );
+  }
+}
+
+/// Article dans le caddie — coché, barré, bouton "Remettre dans la liste"
+class _InCartTile extends ConsumerWidget {
+  final ShoppingItem item;
+  const _InCartTile({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      color: AppTheme.success.withValues(alpha: 0.06),
+      child: ListTile(
+        leading: GestureDetector(
+          onTap: () => ref.read(shoppingItemsProvider.notifier).toggle(item.id),
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.rectangle,
+              borderRadius: BorderRadius.circular(6),
+              color: AppTheme.success,
+            ),
+            child: const Icon(Icons.check, color: Colors.white, size: 18),
+          ),
+        ),
+        title: Text(
+          item.name,
+          style: GoogleFonts.nunito(
+            fontSize: 15,
+            color: AppTheme.textSecondary,
+            decoration: TextDecoration.lineThrough,
+            decorationColor: AppTheme.textSecondary,
+          ),
+        ),
+        subtitle: Text(
+          item.quantity != null
+              ? '${item.category.emoji}  ·  ${item.quantity}'
+              : item.category.emoji,
+          style: GoogleFonts.nunito(fontSize: 12, color: AppTheme.textSecondary),
+        ),
+        trailing: TextButton.icon(
+          onPressed: () => ref.read(shoppingItemsProvider.notifier).toggle(item.id),
+          icon: const Icon(Icons.add, size: 15),
+          label: const Text('Remettre', style: TextStyle(fontSize: 12)),
+          style: TextButton.styleFrom(
+            foregroundColor: AppTheme.primary,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
       ),
     );
   }
