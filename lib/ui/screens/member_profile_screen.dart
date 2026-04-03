@@ -12,6 +12,7 @@ import 'package:vie_de_famille/ui/theme/app_theme.dart';
 import 'package:vie_de_famille/ui/widgets/member_avatar.dart';
 import 'package:vie_de_famille/ui/widgets/task_card.dart';
 import 'package:vie_de_famille/core/models/claimed_reward.dart';
+import 'package:vie_de_famille/core/models/avatars.dart';
 
 /// Profil d'un membre — avatar, infos, points, tâches, messages, requêtes
 class MemberProfileScreen extends ConsumerWidget {
@@ -67,29 +68,48 @@ class MemberProfileScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Header — avatar + bouton photo
-            GestureDetector(
-              onTap: () => _pickPhoto(context, ref, liveMember),
-              child: Stack(
-                children: [
-                  MemberAvatar(member: liveMember, size: 96),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
+            // Header — avatar + boutons photo / avatar
+            Stack(
+              children: [
+                GestureDetector(
+                  onTap: () => _showAvatarPicker(context, ref, liveMember),
+                  child: MemberAvatar(member: liveMember, size: 96),
+                ),
+                // Bouton photo (caméra)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: GestureDetector(
+                    onTap: () => _pickPhoto(context, ref, liveMember),
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: color,
                         shape: BoxShape.circle,
-                        border: Border.all(
-                            color: AppTheme.background, width: 2),
+                        border: Border.all(color: AppTheme.background, width: 2),
                       ),
-                      child: const Icon(Icons.camera_alt,
-                          color: Colors.white, size: 16),
+                      child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
                     ),
                   ),
-                ],
-              ),
+                ),
+                // Bouton avatar (emoji)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  child: GestureDetector(
+                    onTap: () => _showAvatarPicker(context, ref, liveMember),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.secondary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppTheme.background, width: 2),
+                      ),
+                      child: const Icon(Icons.face, color: Colors.white, size: 16),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             Text(
@@ -424,6 +444,64 @@ class MemberProfileScreen extends ConsumerWidget {
     );
   }
 
+  /// Ouvre le sélecteur d'avatar avec verrous par palier de points
+  void _showAvatarPicker(BuildContext context, WidgetRef ref, Member member) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        maxChildSize: 0.92,
+        minChildSize: 0.4,
+        builder: (_, scrollCtrl) => SingleChildScrollView(
+          controller: scrollCtrl,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Choisir un avatar',
+                style: GoogleFonts.quicksand(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${member.totalPointsEarned} pts gagnés — ${_unlockedCount(member.totalPointsEarned)} avatars débloqués',
+                style: GoogleFonts.nunito(fontSize: 13, color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              _AvatarTierPickerSheet(
+                selectedIndex: member.avatarIndex,
+                totalPoints: member.totalPointsEarned,
+                onSelect: (i) {
+                  final updated = member.copyWith(avatarIndex: i);
+                  ref.read(membersProvider.notifier).update(updated);
+                  Navigator.of(ctx).pop();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  int _unlockedCount(int pts) =>
+      FamilyAvatars.tiers.where((t) => pts >= t.requiredPoints).fold(0, (acc, t) => acc + t.emojis.length);
+
   /// Choisir une photo de profil depuis la galerie
   void _pickPhoto(
       BuildContext context, WidgetRef ref, Member member) async {
@@ -494,6 +572,123 @@ class MemberProfileScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Grille d'avatars avec verrous — utilisée dans le bottom sheet du profil
+class _AvatarTierPickerSheet extends StatelessWidget {
+  final int selectedIndex;
+  final int totalPoints;
+  final void Function(int index) onSelect;
+
+  const _AvatarTierPickerSheet({
+    required this.selectedIndex,
+    required this.totalPoints,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    int globalIndex = 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: FamilyAvatars.tiers.map((tier) {
+        final tierStart = globalIndex;
+        globalIndex += tier.emojis.length;
+        final isLocked = totalPoints < tier.requiredPoints;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 14, bottom: 6),
+              child: Row(
+                children: [
+                  Text(tier.badge, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 6),
+                  Text(
+                    tier.label,
+                    style: GoogleFonts.nunito(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isLocked ? Colors.grey.shade400 : AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (tier.requiredPoints > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isLocked
+                            ? Colors.grey.shade200
+                            : AppTheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isLocked ? Icons.lock_outline : Icons.lock_open_outlined,
+                            size: 11,
+                            color: isLocked ? Colors.grey.shade400 : AppTheme.primary,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${tier.requiredPoints} pts',
+                            style: GoogleFonts.nunito(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isLocked ? Colors.grey.shade400 : AppTheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 10,
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 6,
+              ),
+              itemCount: tier.emojis.length,
+              itemBuilder: (_, i) {
+                final index = tierStart + i;
+                final isSelected = selectedIndex == index;
+                return GestureDetector(
+                  onTap: isLocked ? null : () => onSelect(index),
+                  child: Opacity(
+                    opacity: isLocked ? 0.3 : 1.0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppTheme.primary.withValues(alpha: 0.15)
+                            : AppTheme.cardColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? AppTheme.primary : Colors.grey.shade300,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          tier.emojis[i],
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      }).toList(),
     );
   }
 }

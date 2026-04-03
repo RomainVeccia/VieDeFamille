@@ -248,41 +248,10 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 8,
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                ),
-                itemCount: FamilyAvatars.emojis.length,
-                itemBuilder: (context, index) {
-                  final selected = _avatarIndex == index;
-                  return GestureDetector(
-                    onTap: () => setState(() => _avatarIndex = index),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppTheme.primary.withValues(alpha: 0.15)
-                            : AppTheme.cardColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: selected
-                              ? AppTheme.primary
-                              : Colors.grey.shade300,
-                          width: selected ? 2 : 1,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          FamilyAvatars.emojis[index],
-                          style: const TextStyle(fontSize: 22),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+              _AvatarTierGrid(
+                selectedIndex: _avatarIndex,
+                unlockedPoints: null, // création = tout visible
+                onSelect: (i) => setState(() => _avatarIndex = i),
               ),
               const SizedBox(height: 24),
 
@@ -338,6 +307,131 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Grille d'avatars groupée par tier — réutilisée dans add_member et profile
+class _AvatarTierGrid extends StatelessWidget {
+  /// Index avatar sélectionné
+  final int selectedIndex;
+
+  /// Points totaux du membre (null = tout débloqué — ex: création)
+  final int? unlockedPoints;
+
+  final void Function(int index) onSelect;
+
+  const _AvatarTierGrid({
+    required this.selectedIndex,
+    required this.unlockedPoints,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    int globalIndex = 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: FamilyAvatars.tiers.map((tier) {
+        final tierStart = globalIndex;
+        globalIndex += tier.emojis.length;
+        final isLocked = unlockedPoints != null &&
+            unlockedPoints! < tier.requiredPoints;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // En-tête du tier
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 6),
+              child: Row(
+                children: [
+                  Text(tier.badge, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 6),
+                  Text(
+                    tier.label,
+                    style: GoogleFonts.nunito(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isLocked ? Colors.grey.shade400 : AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (tier.requiredPoints > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isLocked
+                            ? Colors.grey.shade200
+                            : AppTheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isLocked ? Icons.lock_outline : Icons.lock_open_outlined,
+                            size: 11,
+                            color: isLocked ? Colors.grey.shade400 : AppTheme.primary,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${tier.requiredPoints} pts',
+                            style: GoogleFonts.nunito(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isLocked ? Colors.grey.shade400 : AppTheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Grille 10 avatars
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 10,
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 6,
+              ),
+              itemCount: tier.emojis.length,
+              itemBuilder: (_, i) {
+                final index = tierStart + i;
+                final isSelected = selectedIndex == index;
+                return GestureDetector(
+                  onTap: isLocked ? null : () => onSelect(index),
+                  child: Opacity(
+                    opacity: isLocked ? 0.35 : 1.0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppTheme.primary.withValues(alpha: 0.15)
+                            : AppTheme.cardColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? AppTheme.primary : Colors.grey.shade300,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          tier.emojis[i],
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      }).toList(),
     );
   }
 }

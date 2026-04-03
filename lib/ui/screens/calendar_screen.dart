@@ -154,10 +154,10 @@ class _MonthView extends StatelessWidget {
 }
 
 // ============================================================
-// VUE SEMAINE
+// VUE SEMAINE — grille horaire 8h-20h
 // ============================================================
 
-class _WeekView extends StatelessWidget {
+class _WeekView extends StatefulWidget {
   final DateTime selectedDay, focusedDay;
   final List<Member> members;
   final List<FamilyEvent> events;
@@ -170,106 +170,326 @@ class _WeekView extends StatelessWidget {
     required this.onDaySelected, required this.onPageChanged,
   });
 
-  List<DateTime> _weekDays(DateTime day) {
-    final monday = day.subtract(Duration(days: day.weekday - 1));
-    return List.generate(7, (i) => monday.add(Duration(days: i)));
+  @override
+  State<_WeekView> createState() => _WeekViewState();
+}
+
+class _WeekViewState extends State<_WeekView> {
+  static const _startHour = 8;
+  static const _endHour = 20;
+  static const _hourH = 64.0;
+  static const _timeColW = 40.0;
+  late final ScrollController _scroll;
+
+  List<DateTime> get _days {
+    final mon = widget.selectedDay.subtract(Duration(days: widget.selectedDay.weekday - 1));
+    return List.generate(7, (i) => mon.add(Duration(days: i)));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    final offset = (now.hour >= _startHour && now.hour < _endHour)
+        ? ((now.hour - _startHour - 1) * _hourH).clamp(0.0, (_endHour - _startHour) * _hourH)
+        : 0.0;
+    _scroll = ScrollController(initialScrollOffset: offset);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _prevWeek() {
+    final d = widget.selectedDay.subtract(const Duration(days: 7));
+    widget.onDaySelected(d, d);
+  }
+
+  void _nextWeek() {
+    final d = widget.selectedDay.add(const Duration(days: 7));
+    widget.onDaySelected(d, d);
   }
 
   @override
   Widget build(BuildContext context) {
-    final days = _weekDays(selectedDay);
-    final dayEvents = events.where((e) => e.isOnDay(selectedDay)).toList();
+    final days = _days;
+    final allDay = widget.events.where((e) => e.allDay && days.any((d) => e.isOnDay(d))).toList();
 
     return Column(
       children: [
-        TableCalendar<FamilyEvent>(
-          firstDay: DateTime(2024, 1, 1),
-          lastDay: DateTime(2030, 12, 31),
-          focusedDay: focusedDay,
-          selectedDayPredicate: (day) => isSameDay(selectedDay, day),
-          calendarFormat: CalendarFormat.week,
-          startingDayOfWeek: StartingDayOfWeek.monday,
-          locale: 'fr_FR',
-          headerStyle: HeaderStyle(
-            formatButtonVisible: false,
-            titleCentered: true,
-            titleTextStyle: GoogleFonts.quicksand(fontSize: 17, fontWeight: FontWeight.bold),
-          ),
-          calendarStyle: CalendarStyle(
-            todayDecoration: BoxDecoration(color: AppTheme.primary.withValues(alpha: 0.3), shape: BoxShape.circle),
-            selectedDecoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
-            markerDecoration: const BoxDecoration(color: AppTheme.secondary, shape: BoxShape.circle),
-            markerSize: 6,
-            markersMaxCount: 3,
-          ),
-          eventLoader: (day) => events.where((e) => e.isOnDay(day)).toList(),
-          onDaySelected: onDaySelected,
-          onPageChanged: onPageChanged,
-        ),
+        _buildWeekNavBar(days),
+        if (allDay.isNotEmpty) _buildAllDayStrip(days, allDay),
         const Divider(height: 1),
-        // Résumé de la semaine — points colorés par jour
-        SizedBox(
-          height: 40,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            children: days.map((d) {
-              final count = events.where((e) => e.isOnDay(d)).length;
-              final isSelected = isSameDay(d, selectedDay);
-              final isToday = isSameDay(d, DateTime.now());
-              return GestureDetector(
-                onTap: () => onDaySelected(d, d),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppTheme.primary : isToday ? AppTheme.primary.withValues(alpha: 0.1) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _scroll,
+            child: LayoutBuilder(
+              builder: (ctx, box) {
+                final dayW = (box.maxWidth - _timeColW) / 7;
+                const totalH = (_endHour - _startHour) * _hourH;
+                return SizedBox(
+                  height: totalH,
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        DateFormat('E', 'fr_FR').format(d),
-                        style: GoogleFonts.nunito(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected ? Colors.white : AppTheme.textPrimary,
+                      // Colonne heures
+                      SizedBox(
+                        width: _timeColW,
+                        child: Stack(
+                          children: List.generate(_endHour - _startHour, (i) => Positioned(
+                            top: i * _hourH - 7,
+                            left: 0, width: _timeColW,
+                            child: Text(
+                              '${_startHour + i}h',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.nunito(fontSize: 10, color: AppTheme.textSecondary),
+                            ),
+                          )),
                         ),
                       ),
-                      if (count > 0) ...[
-                        const SizedBox(width: 4),
-                        Container(
-                          width: 16, height: 16,
-                          decoration: BoxDecoration(
-                            color: isSelected ? Colors.white.withValues(alpha: 0.3) : AppTheme.secondary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text('$count', style: GoogleFonts.nunito(fontSize: 10, color: isSelected ? Colors.white : Colors.white, fontWeight: FontWeight.bold)),
-                          ),
+                      // Grille + blocs
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            // Lignes heures
+                            ...List.generate(_endHour - _startHour + 1, (i) => Positioned(
+                              top: i * _hourH, left: 0, right: 0,
+                              child: Container(height: 1, color: Colors.grey.withValues(alpha: 0.2)),
+                            )),
+                            // Lignes demi-heures
+                            ...List.generate(_endHour - _startHour, (i) => Positioned(
+                              top: i * _hourH + _hourH / 2, left: 0, right: 0,
+                              child: Container(height: 1, color: Colors.grey.withValues(alpha: 0.08)),
+                            )),
+                            // Séparateurs verticaux
+                            ...List.generate(6, (i) => Positioned(
+                              left: (i + 1) * dayW, top: 0, bottom: 0,
+                              child: Container(width: 0.5, color: Colors.grey.withValues(alpha: 0.2)),
+                            )),
+                            // Fond colonne aujourd'hui
+                            ..._buildTodayHighlight(days, dayW, totalH),
+                            // Indicateur maintenant
+                            ..._buildNowIndicator(days, dayW),
+                            // Blocs événements
+                            ..._buildEventBlocks(days, dayW),
+                          ],
                         ),
-                      ],
+                      ),
                     ],
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        const Divider(height: 1),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              DateFormat('EEEE d MMMM', 'fr_FR').format(selectedDay),
-              style: GoogleFonts.quicksand(fontWeight: FontWeight.bold, fontSize: 15),
+                );
+              },
             ),
           ),
         ),
-        Expanded(child: _EventList(events: dayEvents, members: members)),
       ],
     );
+  }
+
+  Widget _buildWeekNavBar(List<DateTime> days) {
+    return Container(
+      color: AppTheme.cardColor,
+      child: Row(
+        children: [
+          // Flèche précédente
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 20),
+            onPressed: _prevWeek,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: _timeColW, minHeight: 56),
+          ),
+          // 7 colonnes jours
+          ...days.map((d) {
+            final isSelected = isSameDay(d, widget.selectedDay);
+            final isToday = isSameDay(d, DateTime.now());
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => widget.onDaySelected(d, d),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: isSelected
+                      ? const BoxDecoration(border: Border(bottom: BorderSide(color: AppTheme.primary, width: 2)))
+                      : null,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat('E', 'fr_FR').format(d).substring(0, 1).toUpperCase(),
+                        style: GoogleFonts.nunito(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isToday ? AppTheme.primary : AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        width: 26, height: 26,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppTheme.primary
+                              : isToday
+                                  ? AppTheme.primary.withValues(alpha: 0.15)
+                                  : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${d.day}',
+                            style: GoogleFonts.quicksand(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: isSelected
+                                  ? Colors.white
+                                  : isToday
+                                      ? AppTheme.primary
+                                      : AppTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          // Flèche suivante
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 20),
+            onPressed: _nextWeek,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 56),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAllDayStrip(List<DateTime> days, List<FamilyEvent> allDayEvents) {
+    return Container(
+      color: AppTheme.cardColor,
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: _timeColW,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text('tous', textAlign: TextAlign.center,
+                  style: GoogleFonts.nunito(fontSize: 9, color: AppTheme.textSecondary)),
+            ),
+          ),
+          ...days.map((d) {
+            final dayEvents = allDayEvents.where((e) => e.isOnDay(d)).toList();
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1),
+                child: Column(
+                  children: dayEvents.map((e) {
+                    final c = AppTheme.memberColors[e.colorIndex % AppTheme.memberColors.length];
+                    return Container(
+                      margin: const EdgeInsets.only(top: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: c.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(3),
+                        border: Border(left: BorderSide(color: c, width: 2)),
+                      ),
+                      child: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.nunito(fontSize: 9, color: c, fontWeight: FontWeight.w600)),
+                    );
+                  }).toList(),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(width: 32), // compensation flèche droite
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildTodayHighlight(List<DateTime> days, double dayW, double totalH) {
+    final i = days.indexWhere((d) => isSameDay(d, DateTime.now()));
+    if (i < 0) return [];
+    return [
+      Positioned(
+        left: i * dayW, top: 0, width: dayW, height: totalH,
+        child: Container(color: AppTheme.primary.withValues(alpha: 0.03)),
+      ),
+    ];
+  }
+
+  List<Widget> _buildNowIndicator(List<DateTime> days, double dayW) {
+    final now = DateTime.now();
+    final i = days.indexWhere((d) => isSameDay(d, now));
+    if (i < 0 || now.hour < _startHour || now.hour >= _endHour) return [];
+    final top = ((now.hour - _startHour) * 60 + now.minute) * (_hourH / 60);
+    return [
+      Positioned(
+        top: top, left: i * dayW, width: dayW,
+        child: Container(height: 2, color: Colors.red.shade400),
+      ),
+      Positioned(
+        top: top - 4, left: i * dayW - 4,
+        child: Container(
+          width: 9, height: 9,
+          decoration: BoxDecoration(color: Colors.red.shade400, shape: BoxShape.circle),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _buildEventBlocks(List<DateTime> days, double dayW) {
+    final widgets = <Widget>[];
+    for (int i = 0; i < days.length; i++) {
+      final d = days[i];
+      final dayEvents = widget.events.where((e) => !e.allDay && e.isOnDay(d)).toList();
+      for (final e in dayEvents) {
+        final sh = e.dateStart.hour.clamp(_startHour, _endHour - 1);
+        final sm = e.dateStart.hour < _startHour ? 0 : e.dateStart.minute;
+        final top = ((sh - _startHour) * 60 + sm) * (_hourH / 60);
+
+        double durMin = 60;
+        if (e.dateEnd != null) durMin = e.dateEnd!.difference(e.dateStart).inMinutes.toDouble();
+        final height = (durMin * _hourH / 60).clamp(22.0, (_endHour - _startHour) * _hourH);
+
+        final c = AppTheme.memberColors[e.colorIndex % AppTheme.memberColors.length];
+
+        widgets.add(Positioned(
+          top: top, left: i * dayW + 1, width: dayW - 2, height: height,
+          child: GestureDetector(
+            onTap: () => widget.onDaySelected(d, d),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+              decoration: BoxDecoration(
+                color: c.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(4),
+                border: Border(left: BorderSide(color: c, width: 3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.nunito(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+                  if (height > 32)
+                    Text(
+                      DateFormat('HH:mm').format(e.dateStart) +
+                          (e.dateEnd != null ? ' – ${DateFormat('HH:mm').format(e.dateEnd!)}' : ''),
+                      style: GoogleFonts.nunito(fontSize: 9, color: AppTheme.textSecondary),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ));
+      }
+    }
+    return widgets;
   }
 }
 

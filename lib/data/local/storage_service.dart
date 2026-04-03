@@ -34,6 +34,7 @@ class StorageService {
   StorageService._();
 
   static const _seededKey = 'vdf_seeded';
+  static const _seededTasksV1Key = 'vdf_seeded_tasks_v1';
 
   static Future<StorageService> getInstance() async {
     if (_instance != null) return _instance!;
@@ -47,6 +48,12 @@ class StorageService {
       await service._seedDefaultBudgetCategories();
       await service._seedDefaultRewards();
       await service._prefs.setBool(_seededKey, true);
+    }
+
+    // Seed tâches v1 — s'exécute même sur installs existantes
+    if (!service._prefs.containsKey(_seededTasksV1Key)) {
+      await service._seedDefaultTasksV1();
+      await service._prefs.setBool(_seededTasksV1Key, true);
     }
 
     return service;
@@ -272,6 +279,41 @@ class StorageService {
   Future<void> saveClaimedRewards(List<ClaimedReward> claims) async {
     final json = jsonEncode(claims.map((c) => c.toJson()).toList());
     await _prefs.setString(_claimedRewardsKey, json);
+  }
+
+  /// Ajoute les tâches par défaut v1 aux tâches existantes
+  Future<void> _seedDefaultTasksV1() async {
+    final now = DateTime.now();
+    final existing = getTasks();
+    final newTasks = [
+      FamilyTask(
+        id: 'task_seed_bois_v1',
+        title: 'Remplir la caisse à bois',
+        description: 'Aller chercher du bois pour remplir la caisse si elle est vide',
+        createdBy: 'romain',
+        category: TaskCategory.maison,
+        priority: TaskPriority.medium,
+        recurrence: TaskRecurrence.none,
+        pointsValue: 15,
+        createdAt: now,
+      ),
+      FamilyTask(
+        id: 'task_seed_gateau_v1',
+        title: 'Faire un gâteau ou des cookies',
+        createdBy: 'romain',
+        category: TaskCategory.maison,
+        priority: TaskPriority.low,
+        recurrence: TaskRecurrence.none,
+        pointsValue: 20,
+        createdAt: now,
+      ),
+    ];
+    // N'ajoute que si pas déjà présents
+    final ids = existing.map((t) => t.id).toSet();
+    final toAdd = newTasks.where((t) => !ids.contains(t.id)).toList();
+    if (toAdd.isNotEmpty) {
+      await saveTasks([...existing, ...toAdd]);
+    }
   }
 
   /// Pré-charge les 16 récompenses par défaut (3 niveaux)
