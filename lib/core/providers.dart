@@ -5,6 +5,10 @@ import 'package:vie_de_famille/core/models/family_message.dart';
 import 'package:vie_de_famille/core/models/family_event.dart';
 import 'package:vie_de_famille/core/models/reward.dart';
 import 'package:vie_de_famille/core/models/game_score.dart';
+import 'package:vie_de_famille/core/models/shopping_list.dart';
+import 'package:vie_de_famille/core/models/shopping_item.dart';
+import 'package:vie_de_famille/core/models/budget_category.dart';
+import 'package:vie_de_famille/core/models/expense.dart';
 import 'package:vie_de_famille/core/services/task_service.dart';
 import 'package:vie_de_famille/data/local/storage_service.dart';
 
@@ -321,4 +325,143 @@ final gameScoresProvider =
     StateNotifierProvider<GameScoresNotifier, List<GameScore>>((ref) {
   final storage = ref.watch(storageServiceProvider);
   return GameScoresNotifier(storage);
+});
+
+// ============================================================
+// LISTES DE COURSES
+// ============================================================
+class ShoppingListsNotifier extends StateNotifier<List<ShoppingList>> {
+  final StorageService? _storage;
+
+  ShoppingListsNotifier(this._storage)
+      : super(_storage?.getShoppingLists() ?? []);
+
+  Future<void> add(ShoppingList list) async {
+    state = [...state, list];
+    await _storage?.saveShoppingLists(state);
+  }
+
+  Future<void> remove(String id) async {
+    state = state.where((l) => l.id != id).toList();
+    await _storage?.saveShoppingLists(state);
+  }
+
+  Future<void> update(ShoppingList list) async {
+    state = state.map((l) => l.id == list.id ? list : l).toList();
+    await _storage?.saveShoppingLists(state);
+  }
+}
+
+final shoppingListsProvider =
+    StateNotifierProvider<ShoppingListsNotifier, List<ShoppingList>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return ShoppingListsNotifier(storage);
+});
+
+// ============================================================
+// ARTICLES DE COURSES
+// ============================================================
+class ShoppingItemsNotifier extends StateNotifier<List<ShoppingItem>> {
+  final StorageService? _storage;
+
+  ShoppingItemsNotifier(this._storage)
+      : super(_storage?.getShoppingItems() ?? []);
+
+  Future<void> add(ShoppingItem item) async {
+    state = [...state, item];
+    await _storage?.saveShoppingItems(state);
+  }
+
+  Future<void> toggle(String itemId) async {
+    state = state.map((i) {
+      if (i.id != itemId) return i;
+      return i.checked ? i.uncheck() : i.check();
+    }).toList();
+    await _storage?.saveShoppingItems(state);
+  }
+
+  Future<void> remove(String id) async {
+    state = state.where((i) => i.id != id).toList();
+    await _storage?.saveShoppingItems(state);
+  }
+
+  /// Supprimer tous les articles d'une liste (quand on supprime la liste)
+  Future<void> removeForList(String listId) async {
+    state = state.where((i) => i.listId != listId).toList();
+    await _storage?.saveShoppingItems(state);
+  }
+
+  /// Décocher tous les articles d'une liste (nouvelle session courses)
+  Future<void> uncheckAll(String listId) async {
+    state = state.map((i) => i.listId == listId ? i.uncheck() : i).toList();
+    await _storage?.saveShoppingItems(state);
+  }
+}
+
+final shoppingItemsProvider =
+    StateNotifierProvider<ShoppingItemsNotifier, List<ShoppingItem>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return ShoppingItemsNotifier(storage);
+});
+
+// ============================================================
+// CATÉGORIES BUDGET
+// ============================================================
+class BudgetCategoriesNotifier extends StateNotifier<List<BudgetCategory>> {
+  final StorageService? _storage;
+
+  BudgetCategoriesNotifier(this._storage)
+      : super(_storage?.getBudgetCategories() ?? []);
+
+  Future<void> add(BudgetCategory category) async {
+    state = [...state, category];
+    await _storage?.saveBudgetCategories(state);
+  }
+
+  Future<void> update(BudgetCategory category) async {
+    state = state.map((c) => c.id == category.id ? category : c).toList();
+    await _storage?.saveBudgetCategories(state);
+  }
+
+  Future<void> remove(String id) async {
+    state = state.where((c) => c.id != id).toList();
+    await _storage?.saveBudgetCategories(state);
+  }
+}
+
+final budgetCategoriesProvider =
+    StateNotifierProvider<BudgetCategoriesNotifier, List<BudgetCategory>>(
+        (ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return BudgetCategoriesNotifier(storage);
+});
+
+// ============================================================
+// DÉPENSES
+// ============================================================
+class ExpensesNotifier extends StateNotifier<List<Expense>> {
+  final StorageService? _storage;
+
+  ExpensesNotifier(this._storage) : super(_storage?.getExpenses() ?? []);
+
+  Future<void> add(Expense expense) async {
+    state = [...state, expense];
+    await _storage?.saveExpenses(state);
+  }
+
+  Future<void> remove(String id) async {
+    state = state.where((e) => e.id != id).toList();
+    await _storage?.saveExpenses(state);
+  }
+
+  Future<void> update(Expense expense) async {
+    state = state.map((e) => e.id == expense.id ? expense : e).toList();
+    await _storage?.saveExpenses(state);
+  }
+}
+
+final expensesProvider =
+    StateNotifierProvider<ExpensesNotifier, List<Expense>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return ExpensesNotifier(storage);
 });

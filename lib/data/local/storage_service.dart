@@ -6,6 +6,10 @@ import 'package:vie_de_famille/core/models/family_message.dart';
 import 'package:vie_de_famille/core/models/family_event.dart';
 import 'package:vie_de_famille/core/models/reward.dart';
 import 'package:vie_de_famille/core/models/game_score.dart';
+import 'package:vie_de_famille/core/models/shopping_list.dart';
+import 'package:vie_de_famille/core/models/shopping_item.dart';
+import 'package:vie_de_famille/core/models/budget_category.dart';
+import 'package:vie_de_famille/core/models/expense.dart';
 
 /// Service de stockage local — SharedPreferences + JSON
 class StorageService {
@@ -16,6 +20,10 @@ class StorageService {
   static const _rewardsKey = 'vdf_rewards';
   static const _gameScoresKey = 'vdf_game_scores';
   static const _currentMemberKey = 'vdf_current_member';
+  static const _shoppingListsKey = 'vdf_shopping_lists';
+  static const _shoppingItemsKey = 'vdf_shopping_items';
+  static const _budgetCategoriesKey = 'vdf_budget_categories';
+  static const _expensesKey = 'vdf_expenses';
 
   // Singleton
   static StorageService? _instance;
@@ -34,6 +42,7 @@ class StorageService {
     // Seed les membres de la famille au premier lancement
     if (!service._prefs.containsKey(_seededKey)) {
       await service._seedDefaultMembers();
+      await service._seedDefaultBudgetCategories();
       await service._prefs.setBool(_seededKey, true);
     }
 
@@ -180,5 +189,70 @@ class StorageService {
 
   Future<void> setCurrentMemberId(String id) async {
     await _prefs.setString(_currentMemberKey, id);
+  }
+
+  // --- Shopping Lists ---
+  List<ShoppingList> getShoppingLists() {
+    final json = _prefs.getString(_shoppingListsKey);
+    if (json == null) return [];
+    final list = jsonDecode(json) as List<dynamic>;
+    return list
+        .map((e) => ShoppingList.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveShoppingLists(List<ShoppingList> lists) async {
+    final json = jsonEncode(lists.map((l) => l.toJson()).toList());
+    await _prefs.setString(_shoppingListsKey, json);
+  }
+
+  // --- Shopping Items ---
+  List<ShoppingItem> getShoppingItems() {
+    final json = _prefs.getString(_shoppingItemsKey);
+    if (json == null) return [];
+    final list = jsonDecode(json) as List<dynamic>;
+    return list
+        .map((e) => ShoppingItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveShoppingItems(List<ShoppingItem> items) async {
+    final json = jsonEncode(items.map((i) => i.toJson()).toList());
+    await _prefs.setString(_shoppingItemsKey, json);
+  }
+
+  // --- Budget Categories ---
+  List<BudgetCategory> getBudgetCategories() {
+    final json = _prefs.getString(_budgetCategoriesKey);
+    if (json == null) return [];
+    final list = jsonDecode(json) as List<dynamic>;
+    return list
+        .map((e) => BudgetCategory.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveBudgetCategories(List<BudgetCategory> categories) async {
+    final json = jsonEncode(categories.map((c) => c.toJson()).toList());
+    await _prefs.setString(_budgetCategoriesKey, json);
+  }
+
+  // --- Expenses ---
+  List<Expense> getExpenses() {
+    final json = _prefs.getString(_expensesKey);
+    if (json == null) return [];
+    final list = jsonDecode(json) as List<dynamic>;
+    return list
+        .map((e) => Expense.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveExpenses(List<Expense> expenses) async {
+    final json = jsonEncode(expenses.map((e) => e.toJson()).toList());
+    await _prefs.setString(_expensesKey, json);
+  }
+
+  /// Initialise les catégories de budget par défaut
+  Future<void> _seedDefaultBudgetCategories() async {
+    await saveBudgetCategories(BudgetCategory.defaults());
   }
 }

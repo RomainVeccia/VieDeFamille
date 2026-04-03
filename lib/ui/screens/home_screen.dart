@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:vie_de_famille/core/models/family_message.dart';
 import 'package:vie_de_famille/core/providers.dart';
+import 'package:vie_de_famille/core/services/budget_service.dart';
 import 'package:vie_de_famille/core/services/points_service.dart';
 import 'package:vie_de_famille/ui/screens/add_member_screen.dart';
 import 'package:vie_de_famille/ui/screens/family_view_screen.dart';
@@ -13,6 +14,8 @@ import 'package:vie_de_famille/ui/screens/messages_screen.dart';
 import 'package:vie_de_famille/ui/screens/rewards_screen.dart';
 import 'package:vie_de_famille/ui/screens/game_selection_screen.dart';
 import 'package:vie_de_famille/ui/screens/leaderboard_screen.dart';
+import 'package:vie_de_famille/ui/screens/shopping_screen.dart';
+import 'package:vie_de_famille/ui/screens/budget_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 import 'package:vie_de_famille/ui/widgets/member_avatar.dart';
 
@@ -90,6 +93,9 @@ class _DashboardTab extends ConsumerWidget {
     final allTasks = ref.watch(tasksProvider);
     final events = ref.watch(eventsProvider);
     final messages = ref.watch(messagesProvider);
+    final shoppingLists = ref.watch(shoppingListsProvider);
+    final shoppingItems = ref.watch(shoppingItemsProvider);
+    final expenses = ref.watch(expensesProvider);
 
     final now = DateTime.now();
     final todayEvents = events.where((e) => e.isOnDay(now)).toList();
@@ -272,7 +278,51 @@ class _DashboardTab extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
 
-              // Troisième ligne : Récompenses + Statistiques
+              // Troisième ligne : Courses + Budget
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.shopping_cart,
+                      title: 'Courses',
+                      subtitle: () {
+                        final totalLists = shoppingLists.length;
+                        if (totalLists == 0) return 'Aucune liste';
+                        final pendingItems = shoppingItems
+                            .where((i) => !i.checked)
+                            .length;
+                        return pendingItems == 0
+                            ? 'Tout coché !'
+                            : '$pendingItems article${pendingItems > 1 ? 's' : ''} restant${pendingItems > 1 ? 's' : ''}';
+                      }(),
+                      color: const Color(0xFF26A69A),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ShoppingScreen()),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildBigButton(
+                      icon: Icons.account_balance_wallet,
+                      title: 'Budget',
+                      subtitle: () {
+                        final total = BudgetService.totalCurrentMonth(expenses);
+                        return total == 0
+                            ? 'Ce mois : 0 €'
+                            : 'Ce mois : ${total.toStringAsFixed(2)} €';
+                      }(),
+                      color: const Color(0xFF5C6BC0),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const BudgetScreen()),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Quatrième ligne : Récompenses + Stats
               Row(
                 children: [
                   Expanded(
@@ -303,7 +353,7 @@ class _DashboardTab extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
 
-              // Quatrième ligne : Chance du jour + Classement
+              // Cinquième ligne : Chance du jour + Classement
               Row(
                 children: [
                   Expanded(
