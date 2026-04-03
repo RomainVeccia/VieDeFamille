@@ -168,10 +168,10 @@ class _LemmingsGameScreenState extends ConsumerState<LemmingsGameScreen>
                     // Convertir tap en coordonnées terrain
                     final tapX = details.localPosition.dx /
                         constraints.maxWidth *
-                        LemmingsGame.terrainW;
+                        LemmingsGame.tw;
                     final tapY = details.localPosition.dy /
                         constraints.maxHeight *
-                        LemmingsGame.terrainH;
+                        LemmingsGame.th;
                     _game.assignSkill(tapX, tapY);
                   },
                   child: CustomPaint(
@@ -210,7 +210,7 @@ class _LemmingsGameScreenState extends ConsumerState<LemmingsGameScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _ctrlBtn('−', () => _game.decreaseRate()),
+                    _ctrlBtn('−', () => _game.slowerRate()),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
@@ -221,7 +221,7 @@ class _LemmingsGameScreenState extends ConsumerState<LemmingsGameScreen>
                         ),
                       ),
                     ),
-                    _ctrlBtn('+', () => _game.increaseRate()),
+                    _ctrlBtn('+', () => _game.fasterRate()),
                     const SizedBox(width: 24),
                     GestureDetector(
                       onTap: () => _game.nuke(),

@@ -5,17 +5,16 @@ import 'package:flutter/material.dart';
 // === Les 8 compétences classiques ===
 enum LemmingSkill {
   none,
-  climber, // escalade les murs verticaux
-  floater, // parapluie, survit aux chutes
-  bomber, // explose après 5s, creuse un trou
-  blocker, // bras écartés, bloque les autres
-  builder, // construit un escalier diagonal (12 marches)
-  basher, // creuse horizontalement
-  miner, // creuse en diagonale vers le bas
-  digger, // creuse droit vers le bas
+  climber,
+  floater,
+  bomber,
+  blocker,
+  builder,
+  basher,
+  miner,
+  digger,
 }
 
-// === États d'animation ===
 enum LemmingState {
   walking,
   falling,
@@ -26,59 +25,53 @@ enum LemmingState {
   digging,
   blocking,
   floating,
-  bombing, // compte à rebours avant explosion
-  dying,
-  exiting, // animation de sortie
-  splat, // mort par chute
+  bombing,
+  splatting,
+  exiting,
 }
 
-/// Un lemming individuel
 class Lemming {
   double x, y;
-  int dir; // 1 droite, -1 gauche
+  int dir; // 1=droite, -1=gauche
   LemmingSkill skill;
   LemmingState state;
   bool alive;
   bool exited;
   double fallDist;
-  double animTimer; // timer d'animation
-  double bomberTimer; // compte à rebours bombe (5s)
-  int buildCount; // marches construites (max 12)
-  double actionCooldown;
-  bool hasFloater; // le floater est permanent
-  bool hasClimber; // le climber est permanent
+  double animFrame; // frame d'animation continue
+  double bomberTimer;
+  int buildCount;
+  double actionCD;
+  bool permClimber;
+  bool permFloater;
 
-  Lemming({
-    required this.x,
-    required this.y,
-    this.dir = 1,
-  })  : skill = LemmingSkill.none,
+  Lemming({required this.x, required this.y, this.dir = 1})
+      : skill = LemmingSkill.none,
         state = LemmingState.falling,
         alive = true,
         exited = false,
         fallDist = 0,
-        animTimer = 0,
+        animFrame = 0,
         bomberTimer = 5.0,
         buildCount = 0,
-        actionCooldown = 0,
-        hasFloater = false,
-        hasClimber = false;
+        actionCD = 0,
+        permClimber = false,
+        permFloater = false;
 }
 
-/// Moteur de jeu Lemmings fidèle à l'original
+/// Moteur Lemmings — rendu haute fidélité
 class LemmingsGame {
-  // Résolution du terrain (pixel-based comme l'original)
-  static const int terrainW = 320;
-  static const int terrainH = 160;
+  static const int tw = 400; // terrain width
+  static const int th = 200; // terrain height
 
-  // Le terrain — chaque pixel est solide (true) ou vide (false)
-  late Uint8List terrain; // 0 = vide, 1 = terre, 2 = acier (indestructible)
+  // Terrain pixel — 0=vide, 1=terre, 2=acier, 3=terre sombre
+  late Uint8List terrain;
+  // Couleur de chaque pixel de terrain (pour un rendu riche)
+  late Uint32List terrainColor;
 
-  // Positions clés
-  double trapX = 0, trapY = 0; // trappe d'entrée
-  double exitX = 0, exitY = 0; // sortie
+  double trapX = 0, trapY = 0;
+  double exitX = 0, exitY = 0;
 
-  // Lemmings
   final List<Lemming> lemmings = [];
   int totalToSpawn = 0;
   int spawned = 0;
@@ -86,31 +79,28 @@ class LemmingsGame {
   int dead = 0;
   int required_ = 0;
   double spawnTimer = 0;
-  double spawnRate = 1.5; // secondes entre chaque spawn
+  double spawnRate = 1.2;
 
-  // Compétences disponibles
   final Map<LemmingSkill, int> skills = {};
   LemmingSkill selectedSkill = LemmingSkill.none;
 
-  // Paramètres physique
-  static const double walkSpeed = 18.0;
-  static const double fallSpeed = 40.0;
-  static const double climbSpeed = 16.0;
-  static const double maxSafeFall = 30.0; // pixels
-  static const int buildMax = 12;
+  static const double walkSpd = 15.0;
+  static const double fallSpd = 50.0;
+  static const double climbSpd = 12.0;
+  static const double safeFall = 35.0;
 
-  // État
   int score = 0;
   int currentLevel = 0;
   bool gameOver = false;
   bool won = false;
   double timer = 0;
   bool nuked = false;
-  double trapAnimTimer = 0;
+  double trapAnim = 0;
   bool trapOpen = false;
 
   final VoidCallback onStateChanged;
   final void Function(int finalScore) onGameOver;
+  final Random _rng = Random(42);
 
   LemmingsGame({
     required this.onStateChanged,
@@ -119,197 +109,256 @@ class LemmingsGame {
     _loadLevel(0);
   }
 
-  // === Accès terrain ===
-  int _tget(int x, int y) {
-    if (x < 0 || x >= terrainW || y < 0 || y >= terrainH) return 0;
-    return terrain[y * terrainW + x];
+  // === Terrain helpers ===
+  int tget(int x, int y) {
+    if (x < 0 || x >= tw || y < 0 || y >= th) return 0;
+    return terrain[y * tw + x];
   }
 
-  void _tset(int x, int y, int v) {
-    if (x < 0 || x >= terrainW || y < 0 || y >= terrainH) return;
-    terrain[y * terrainW + x] = v;
+  void _tset(int x, int y, int v, [int? color]) {
+    if (x < 0 || x >= tw || y < 0 || y >= th) return;
+    terrain[y * tw + x] = v;
+    if (color != null) terrainColor[y * tw + x] = color;
   }
 
-  bool _solid(int x, int y) => _tget(x, y) > 0;
-  bool _steel(int x, int y) => _tget(x, y) == 2;
+  bool solid(int x, int y) => tget(x, y) > 0;
+  bool _steel(int x, int y) => tget(x, y) == 2;
 
-  /// Creuser un cercle dans le terrain
-  void _dig(int cx, int cy, int radius) {
-    for (int dy = -radius; dy <= radius; dy++) {
-      for (int dx = -radius; dx <= radius; dx++) {
-        if (dx * dx + dy * dy <= radius * radius) {
-          final px = cx + dx;
-          final py = cy + dy;
+  void _digCircle(int cx, int cy, int r) {
+    for (int dy = -r; dy <= r; dy++) {
+      for (int dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy <= r * r) {
+          final px = cx + dx, py = cy + dy;
           if (!_steel(px, py)) _tset(px, py, 0);
         }
       }
     }
   }
 
-  /// Creuser un rectangle
-  void _digRect(int x, int y, int w, int h) {
+  /// Remplir un rectangle avec couleur naturelle
+  void _fill(int x, int y, int w, int h, int type, {bool isSteel = false}) {
     for (int dy = 0; dy < h; dy++) {
       for (int dx = 0; dx < w; dx++) {
-        if (!_steel(x + dx, y + dy)) _tset(x + dx, y + dy, 0);
+        final px = x + dx, py = y + dy;
+        if (px < 0 || px >= tw || py < 0 || py >= th) continue;
+        final t = isSteel ? 2 : type;
+        int c;
+        if (isSteel) {
+          c = ((px + py) % 2 == 0) ? 0xFF7788AA : 0xFF667799;
+        } else {
+          final n = ((px * 7 + py * 13) % 6);
+          c = switch (n) {
+            0 => 0xFF2D8B2D,
+            1 => 0xFF1E7A1E,
+            2 => 0xFF339933,
+            3 => 0xFF267826,
+            4 => 0xFF3BA53B,
+            _ => 0xFF2A8A2A,
+          };
+        }
+        _tset(px, py, t, c);
       }
     }
   }
 
-  // === Chargement de niveau ===
-  void _loadLevel(int level) {
-    currentLevel = level;
-    terrain = Uint8List(terrainW * terrainH);
+  /// Remplir un ovale (pour des formes organiques)
+  void _fillOval(int cx, int cy, int rx, int ry, int type) {
+    for (int dy = -ry; dy <= ry; dy++) {
+      for (int dx = -rx; dx <= rx; dx++) {
+        if ((dx * dx) / (rx * rx + 0.01) + (dy * dy) / (ry * ry + 0.01) <= 1) {
+          final px = cx + dx, py = cy + dy;
+          final n = ((px * 7 + py * 13) % 6);
+          final c = switch (n) {
+            0 => 0xFF2D8B2D,
+            1 => 0xFF1E7A1E,
+            2 => 0xFF339933,
+            3 => 0xFF267826,
+            4 => 0xFF3BA53B,
+            _ => 0xFF2A8A2A,
+          };
+          _tset(px, py, type, c);
+        }
+      }
+    }
+  }
+
+  /// Ajouter de l'herbe sur la surface
+  void _addGrass() {
+    for (int x = 0; x < tw; x++) {
+      for (int y = 1; y < th; y++) {
+        if (tget(x, y) == 1 && tget(x, y - 1) == 0) {
+          // Surface ! herbe vert clair
+          final n = (x * 3 + y * 7) % 4;
+          final c = switch (n) {
+            0 => 0xFF55EE55,
+            1 => 0xFF44DD44,
+            2 => 0xFF66FF66,
+            _ => 0xFF33CC33,
+          };
+          terrainColor[y * tw + x] = c;
+          // Brins d'herbe au-dessus
+          if (y >= 2 && tget(x, y - 2) == 0 && (x % 3 == 0)) {
+            _tset(x, y - 1, 1, 0xFF44DD44);
+          }
+        }
+      }
+    }
+  }
+
+  // === Chargement de niveaux ===
+  void _loadLevel(int lvl) {
+    currentLevel = lvl;
+    terrain = Uint8List(tw * th);
+    terrainColor = Uint32List(tw * th);
     lemmings.clear();
-    spawned = 0;
-    saved = 0;
-    dead = 0;
+    spawned = saved = dead = 0;
     spawnTimer = 0;
     nuked = false;
     trapOpen = false;
-    trapAnimTimer = 0;
+    trapAnim = 0;
 
-    switch (level) {
+    switch (lvl) {
       case 0:
-        _buildLevel1();
+        _level1();
       case 1:
-        _buildLevel2();
+        _level2();
       case 2:
-        _buildLevel3();
+        _level3();
     }
+    _addGrass();
   }
 
-  // Niveau 1 — "Just dig!" (facile, creuser pour descendre)
-  void _buildLevel1() {
+  // Niveau 1 — "Just dig!" — apprendre à creuser
+  void _level1() {
     totalToSpawn = 10;
     required_ = 7;
     timer = 120;
-    trapX = 50;
-    trapY = 15;
-    exitX = 260;
-    exitY = 138;
+    trapX = 60;
+    trapY = 30;
+    exitX = 340;
+    exitY = 168;
+
     skills.clear();
     skills[LemmingSkill.digger] = 10;
-    skills[LemmingSkill.builder] = 5;
     skills[LemmingSkill.basher] = 3;
-    skills[LemmingSkill.blocker] = 2;
+    skills[LemmingSkill.builder] = 3;
 
-    // Sol principal en haut
-    _fillRect(0, 30, 140, 10, 1);
-    // Pilier de soutien
-    _fillRect(130, 30, 10, 50, 1);
-    // Plateforme milieu
-    _fillRect(100, 80, 120, 8, 1);
-    // Descente vers la sortie
-    _fillRect(180, 88, 10, 52, 1);
-    // Sol du bas
-    _fillRect(0, 140, terrainW, 20, 1);
-    // Plateforme de la sortie
-    _fillRect(230, 140, 60, 5, 2); // acier
-    // Mur gauche de la sortie
-    _fillRect(228, 100, 5, 40, 1);
-    // Petit obstacle à basher
-    _fillRect(70, 30, 8, 0, 1);
+    // Grande île de départ
+    _fillOval(80, 50, 60, 15, 1);
+    // Colonne de descente
+    _fill(120, 50, 20, 90, 1);
+    // Plateforme intermédiaire
+    _fillOval(180, 100, 50, 12, 1);
+    // Pont vers la droite
+    _fill(210, 100, 80, 8, 1);
+    // Mur à basher
+    _fill(290, 80, 10, 28, 1);
+    // Plateforme de sortie
+    _fillOval(330, 110, 30, 10, 1);
+    // Pilier vers le sol
+    _fill(320, 110, 25, 60, 1);
+    // Sol principal
+    _fill(0, 170, tw, 30, 1);
+    // Acier sous la sortie
+    _fill(320, 170, 50, 8, 2);
   }
 
-  // Niveau 2 — "Build to survive" (construire des ponts)
-  void _buildLevel2() {
+  // Niveau 2 — "Build the bridge" — construction + floater
+  void _level2() {
     totalToSpawn = 15;
     required_ = 10;
     timer = 180;
-    trapX = 30;
-    trapY = 10;
-    exitX = 280;
-    exitY = 138;
+    trapX = 40;
+    trapY = 20;
+    exitX = 360;
+    exitY = 168;
+
     skills.clear();
     skills[LemmingSkill.builder] = 8;
+    skills[LemmingSkill.floater] = 5;
     skills[LemmingSkill.blocker] = 3;
     skills[LemmingSkill.digger] = 4;
-    skills[LemmingSkill.basher] = 3;
-    skills[LemmingSkill.floater] = 5;
     skills[LemmingSkill.miner] = 2;
+    skills[LemmingSkill.basher] = 2;
 
     // Plateforme de départ
-    _fillRect(10, 25, 60, 8, 1);
-    // Trou — il faut construire !
-    // Plateforme 2
-    _fillRect(100, 45, 50, 8, 1);
-    // Trou
-    // Plateforme 3
-    _fillRect(170, 65, 50, 8, 1);
-    // Mur à basher
-    _fillRect(220, 45, 8, 28, 1);
-    // Plateforme 4
-    _fillRect(228, 65, 50, 8, 1);
+    _fillOval(60, 35, 35, 10, 1);
+    // Gouffre — faut construire un pont !
+    // Île flottante
+    _fillOval(155, 50, 25, 8, 1);
+    // Autre île
+    _fillOval(240, 65, 30, 10, 1);
+    // Mur épais
+    _fill(280, 40, 12, 40, 1);
+    // Plateforme après le mur
+    _fillOval(320, 75, 35, 10, 1);
     // Descente
-    _fillRect(270, 73, 8, 30, 1);
-    // Plateforme avant sortie
-    _fillRect(240, 100, 70, 8, 1);
+    _fill(340, 75, 12, 95, 1);
     // Sol
-    _fillRect(0, 140, terrainW, 20, 1);
-    // Acier sous la sortie
-    _fillRect(260, 140, 30, 5, 2);
-    // Piège — trou dans le sol
-    for (int x = 120; x < 160; x++) {
-      _tset(x, 140, 0);
-      _tset(x, 141, 0);
-      _tset(x, 142, 0);
+    _fill(0, 170, tw, 30, 1);
+    // Trou mortel dans le sol
+    for (int x = 130; x < 180; x++) {
+      for (int y = 170; y < 200; y++) {
+        _tset(x, y, 0);
+      }
     }
+    _fill(340, 170, 60, 8, 2); // acier sortie
   }
 
-  // Niveau 3 — "The hard way" (combinaison de tout)
-  void _buildLevel3() {
+  // Niveau 3 — "The hard way" — tout utiliser
+  void _level3() {
     totalToSpawn = 20;
     required_ = 15;
-    timer = 240;
-    trapX = 20;
-    trapY = 8;
-    exitX = 290;
-    exitY = 138;
+    timer = 300;
+    trapX = 30;
+    trapY = 15;
+    exitX = 370;
+    exitY = 168;
+
     skills.clear();
-    skills[LemmingSkill.climber] = 3;
+    skills[LemmingSkill.climber] = 4;
     skills[LemmingSkill.floater] = 5;
     skills[LemmingSkill.bomber] = 3;
     skills[LemmingSkill.blocker] = 4;
     skills[LemmingSkill.builder] = 6;
     skills[LemmingSkill.basher] = 5;
-    skills[LemmingSkill.miner] = 3;
+    skills[LemmingSkill.miner] = 4;
     skills[LemmingSkill.digger] = 5;
 
-    // Plateforme départ
-    _fillRect(5, 22, 50, 8, 1);
-    // Grand mur
-    _fillRect(55, 0, 8, 50, 1);
-    // Plateforme après le mur
-    _fillRect(55, 42, 80, 8, 1);
-    // Trou mortel
-    // Plateforme îlot
-    _fillRect(155, 55, 30, 6, 1);
-    // Descente en acier (pas creusable)
-    _fillRect(185, 55, 5, 40, 2);
-    // Grande plateforme
-    _fillRect(120, 90, 100, 8, 1);
-    // Mur à miner
-    _fillRect(220, 80, 8, 18, 1);
-    // Plateforme haute droite
-    _fillRect(228, 80, 60, 8, 1);
-    // Pilier
-    _fillRect(260, 88, 8, 52, 1);
+    // Départ en hauteur
+    _fillOval(50, 28, 30, 8, 1);
+    // Grand mur (faut climber ou basher)
+    _fill(85, 0, 10, 60, 1);
+    // Plateforme cachée derrière le mur
+    _fillOval(130, 50, 40, 10, 1);
+    // Stalactites / piliers
+    _fill(160, 0, 8, 35, 1);
+    _fill(185, 0, 8, 25, 1);
+    // Plateforme milieu
+    _fillOval(200, 80, 35, 10, 1);
+    // Acier (pas creusable — faut contourner)
+    _fill(235, 60, 8, 30, 2);
+    // Terrain ondulé
+    _fillOval(280, 90, 40, 12, 1);
+    // Mur final
+    _fill(330, 70, 10, 30, 1);
+    // Plateforme de sortie
+    _fillOval(360, 100, 25, 8, 1);
+    _fill(350, 100, 30, 70, 1);
     // Sol
-    _fillRect(0, 140, terrainW, 20, 1);
-    _fillRect(270, 140, 40, 5, 2); // acier sortie
-    // Piège à gauche
-    for (int x = 0; x < 30; x++) {
-      _tset(x, 140, 0);
-      _tset(x, 141, 0);
-    }
-  }
-
-  void _fillRect(int x, int y, int w, int h, int val) {
-    for (int dy = 0; dy < h; dy++) {
-      for (int dx = 0; dx < w; dx++) {
-        _tset(x + dx, y + dy, val);
+    _fill(0, 170, tw, 30, 1);
+    // Trous mortels
+    for (int x = 0; x < 40; x++) {
+      for (int y = 170; y < 200; y++) {
+        _tset(x, y, 0);
       }
     }
+    for (int x = 100; x < 140; x++) {
+      for (int y = 170; y < 200; y++) {
+        _tset(x, y, 0);
+      }
+    }
+    _fill(350, 170, 50, 8, 2);
   }
 
   // === Boucle de jeu ===
@@ -323,9 +372,9 @@ class LemmingsGame {
       return;
     }
 
-    // Animation trappe
-    trapAnimTimer += dt;
-    if (trapAnimTimer > 1.0 && !trapOpen) trapOpen = true;
+    // Trappe
+    trapAnim += dt;
+    if (trapAnim > 0.8 && !trapOpen) trapOpen = true;
 
     // Spawn
     if (trapOpen) {
@@ -337,337 +386,334 @@ class LemmingsGame {
       }
     }
 
-    // Update chaque lemming
-    for (final lem in lemmings) {
-      if (!lem.alive || lem.exited) continue;
-      lem.animTimer += dt;
-      lem.actionCooldown = max(0, lem.actionCooldown - dt);
-      _updateLemming(lem, dt);
+    // Update lemmings
+    for (final l in lemmings) {
+      if (!l.alive || l.exited) continue;
+      l.animFrame += dt * 10;
+      l.actionCD = max(0, l.actionCD - dt);
+      _updateLem(l, dt);
     }
 
-    // Nuke — tous les lemmings explosent
+    // Nuke
     if (nuked) {
-      for (final lem in lemmings) {
-        if (lem.alive && !lem.exited && lem.state != LemmingState.bombing) {
-          lem.state = LemmingState.bombing;
-          lem.bomberTimer = 0.5 + Random().nextDouble() * 2;
+      for (final l in lemmings) {
+        if (l.alive && !l.exited && l.state != LemmingState.bombing) {
+          l.state = LemmingState.bombing;
+          l.bomberTimer = 0.3 + _rng.nextDouble() * 2.5;
         }
       }
     }
 
-    // Vérifier fin
-    final allProcessed = spawned >= totalToSpawn &&
-        lemmings.every((l) => !l.alive || l.exited);
-    if (allProcessed) _endLevel();
+    // Fin ?
+    if (spawned >= totalToSpawn && lemmings.every((l) => !l.alive || l.exited)) {
+      _endLevel();
+    }
 
     onStateChanged();
   }
 
-  void _updateLemming(Lemming lem, double dt) {
-    final ix = lem.x.round();
-    final iy = lem.y.round();
+  void _updateLem(Lemming l, double dt) {
+    final ix = l.x.round(), iy = l.y.round();
 
-    // Vérifier la sortie
-    if ((lem.x - exitX).abs() < 6 && (lem.y - exitY).abs() < 6) {
-      lem.state = LemmingState.exiting;
-      lem.exited = true;
+    // Sortie
+    if ((l.x - exitX).abs() < 5 && (l.y - exitY).abs() < 5) {
+      l.state = LemmingState.exiting;
+      l.exited = true;
       saved++;
       score += 50;
       return;
     }
 
     // Hors limites
-    if (lem.y > terrainH + 5 || lem.x < -5 || lem.x > terrainW + 5) {
-      lem.alive = false;
+    if (l.y > th + 5 || l.x < -5 || l.x > tw + 5) {
+      l.alive = false;
       dead++;
       return;
     }
 
-    // === Bomber — compte à rebours ===
-    if (lem.state == LemmingState.bombing) {
-      lem.bomberTimer -= dt;
-      if (lem.bomberTimer <= 0) {
-        _dig(ix, iy, 8); // explosion
-        lem.alive = false;
+    // Bomber
+    if (l.state == LemmingState.bombing) {
+      l.bomberTimer -= dt;
+      if (l.bomberTimer <= 0) {
+        _digCircle(ix, iy, 10);
+        l.alive = false;
         dead++;
       }
       return;
     }
 
-    // === Blocker ===
-    if (lem.state == LemmingState.blocking) return;
+    // Blocker
+    if (l.state == LemmingState.blocking) return;
 
-    // === Vérifier le sol ===
-    final onGround = _solid(ix, iy + 1) || _solid(ix + 1, iy + 1);
+    // Sol ?
+    final onGround = solid(ix, iy + 1) || solid(ix - 1, iy + 1) || solid(ix + 1, iy + 1);
 
-    if (!onGround && lem.state != LemmingState.climbing) {
-      // Tomber
-      if (lem.hasFloater && lem.fallDist > 10) {
-        lem.state = LemmingState.floating;
-        lem.y += fallSpeed * 0.3 * dt;
-        lem.fallDist += fallSpeed * 0.3 * dt;
+    if (!onGround && l.state != LemmingState.climbing) {
+      if (l.permFloater && l.fallDist > 15) {
+        l.state = LemmingState.floating;
+        l.y += fallSpd * 0.25 * dt;
+        l.fallDist += fallSpd * 0.25 * dt;
       } else {
-        lem.state = LemmingState.falling;
-        lem.y += fallSpeed * dt;
-        lem.fallDist += fallSpeed * dt;
+        l.state = LemmingState.falling;
+        l.y += fallSpd * dt;
+        l.fallDist += fallSpd * dt;
       }
       return;
     }
 
     // Atterrissage
-    if (lem.state == LemmingState.falling ||
-        lem.state == LemmingState.floating) {
-      // Ajuster Y pour être pile sur le sol
-      while (_solid(ix, lem.y.round() + 1)) {
-        lem.y -= 0.5;
-        if (lem.y < 0) break;
+    if (l.state == LemmingState.falling || l.state == LemmingState.floating) {
+      // Snap au sol
+      for (int i = 0; i < 5; i++) {
+        if (solid(l.x.round(), l.y.round())) {
+          l.y -= 1;
+        } else {
+          break;
+        }
       }
-      if (lem.fallDist > maxSafeFall && !lem.hasFloater) {
-        lem.state = LemmingState.splat;
-        lem.alive = false;
+      if (l.fallDist > safeFall && !l.permFloater) {
+        l.state = LemmingState.splatting;
+        l.alive = false;
         dead++;
         return;
       }
-      lem.fallDist = 0;
-      lem.state = LemmingState.walking;
+      l.fallDist = 0;
+      l.state = LemmingState.walking;
     }
 
-    // === Digger — creuse vers le bas ===
-    if (lem.state == LemmingState.digging) {
-      lem.actionCooldown -= dt;
-      if (lem.actionCooldown <= 0) {
-        lem.actionCooldown = 0.15;
-        final dy = lem.y.round() + 1;
-        if (_steel(ix, dy) || _steel(ix + 1, dy)) {
-          lem.state = LemmingState.walking;
-          lem.skill = LemmingSkill.none;
+    // === Compétences actives ===
+
+    // Digger
+    if (l.state == LemmingState.digging) {
+      l.actionCD -= dt;
+      if (l.actionCD <= 0) {
+        l.actionCD = 0.12;
+        final dy = l.y.round() + 1;
+        if (_steel(ix, dy)) {
+          l.state = LemmingState.walking;
+          l.skill = LemmingSkill.none;
           return;
         }
-        _digRect(ix - 2, dy, 6, 2);
-        lem.y += 2;
+        for (int dx2 = -3; dx2 <= 3; dx2++) {
+          for (int dy2 = 0; dy2 < 2; dy2++) {
+            if (!_steel(ix + dx2, dy + dy2)) _tset(ix + dx2, dy + dy2, 0);
+          }
+        }
+        l.y += 2;
       }
       return;
     }
 
-    // === Basher — creuse horizontalement ===
-    if (lem.state == LemmingState.bashing) {
-      lem.actionCooldown -= dt;
-      if (lem.actionCooldown <= 0) {
-        lem.actionCooldown = 0.12;
-        final fx = ix + lem.dir * 3;
-        bool hitSteel = false;
-        bool hitSomething = false;
-        for (int dy = -4; dy <= 1; dy++) {
-          for (int dx = 0; dx < 3; dx++) {
-            final px = fx + dx * lem.dir;
-            final py = iy + dy;
+    // Basher
+    if (l.state == LemmingState.bashing) {
+      l.actionCD -= dt;
+      if (l.actionCD <= 0) {
+        l.actionCD = 0.1;
+        bool hitSteel = false, hitTerrain = false;
+        for (int dy2 = -5; dy2 <= 1; dy2++) {
+          for (int dx2 = 1; dx2 <= 4; dx2++) {
+            final px = ix + l.dir * dx2, py = iy + dy2;
             if (_steel(px, py)) {
               hitSteel = true;
-            } else if (_solid(px, py)) {
-              hitSomething = true;
+            } else if (solid(px, py)) {
+              hitTerrain = true;
               _tset(px, py, 0);
             }
           }
         }
-        if (hitSteel || !hitSomething) {
-          lem.state = LemmingState.walking;
-          lem.skill = LemmingSkill.none;
+        if (hitSteel || !hitTerrain) {
+          l.state = LemmingState.walking;
+          l.skill = LemmingSkill.none;
         } else {
-          lem.x += lem.dir * 2;
+          l.x += l.dir * 2;
         }
       }
       return;
     }
 
-    // === Miner — creuse en diagonale ===
-    if (lem.state == LemmingState.mining) {
-      lem.actionCooldown -= dt;
-      if (lem.actionCooldown <= 0) {
-        lem.actionCooldown = 0.15;
-        final fx = ix + lem.dir * 2;
-        final fy = iy + 2;
+    // Miner
+    if (l.state == LemmingState.mining) {
+      l.actionCD -= dt;
+      if (l.actionCD <= 0) {
+        l.actionCD = 0.12;
         bool hitSteel = false;
-        for (int dy = -1; dy <= 2; dy++) {
-          for (int dx = -1; dx <= 1; dx++) {
-            if (_steel(fx + dx, fy + dy)) {
+        for (int dy2 = -1; dy2 <= 3; dy2++) {
+          for (int dx2 = -2; dx2 <= 2; dx2++) {
+            final px = ix + l.dir * 3 + dx2, py = iy + 2 + dy2;
+            if (_steel(px, py)) {
               hitSteel = true;
             } else {
-              _tset(fx + dx, fy + dy, 0);
+              _tset(px, py, 0);
             }
           }
         }
         if (hitSteel) {
-          lem.state = LemmingState.walking;
-          lem.skill = LemmingSkill.none;
+          l.state = LemmingState.walking;
+          l.skill = LemmingSkill.none;
         } else {
-          lem.x += lem.dir * 2;
-          lem.y += 2;
+          l.x += l.dir * 2;
+          l.y += 2;
         }
       }
       return;
     }
 
-    // === Builder — construit un escalier ===
-    if (lem.state == LemmingState.building) {
-      lem.actionCooldown -= dt;
-      if (lem.actionCooldown <= 0) {
-        lem.actionCooldown = 0.25;
-        if (lem.buildCount >= buildMax) {
-          // Fin de construction → demi-tour
-          lem.state = LemmingState.walking;
-          lem.skill = LemmingSkill.none;
-          lem.dir *= -1;
+    // Builder
+    if (l.state == LemmingState.building) {
+      l.actionCD -= dt;
+      if (l.actionCD <= 0) {
+        l.actionCD = 0.2;
+        if (l.buildCount >= 12) {
+          l.state = LemmingState.walking;
+          l.skill = LemmingSkill.none;
+          l.dir *= -1;
           return;
         }
-        // Poser une marche : 3 pixels de large, avancer + monter
-        final bx = ix + lem.dir * 2;
-        final by = iy;
-        for (int dx = 0; dx < 4; dx++) {
-          _tset(bx + dx * lem.dir, by, 1);
+        // Poser 4 pixels de marche
+        for (int dx2 = 0; dx2 < 5; dx2++) {
+          final bx = ix + l.dir * dx2;
+          final by = iy;
+          if (bx >= 0 && bx < tw && by >= 0 && by < th) {
+            _tset(bx, by, 1, 0xFF998866);
+          }
         }
-        lem.x += lem.dir * 2;
-        lem.y -= 1;
-        lem.buildCount++;
-
-        // Collision avec le plafond ?
-        if (_solid((lem.x + lem.dir * 2).round(), lem.y.round() - 2)) {
-          lem.state = LemmingState.walking;
-          lem.skill = LemmingSkill.none;
-          lem.dir *= -1;
+        l.x += l.dir * 3;
+        l.y -= 1;
+        l.buildCount++;
+        // Plafond ?
+        if (solid((l.x + l.dir * 3).round(), l.y.round() - 3)) {
+          l.state = LemmingState.walking;
+          l.skill = LemmingSkill.none;
+          l.dir *= -1;
         }
       }
       return;
     }
 
-    // === Climber — escalade les murs ===
-    if (lem.state == LemmingState.climbing) {
-      lem.y -= climbSpeed * dt;
-      // Arrivé en haut du mur ?
-      if (!_solid(ix + lem.dir, lem.y.round())) {
-        lem.x += lem.dir * 2;
-        lem.state = LemmingState.walking;
+    // Climber
+    if (l.state == LemmingState.climbing) {
+      l.y -= climbSpd * dt;
+      // Haut du mur atteint ?
+      if (!solid(ix + l.dir, l.y.round()) && !solid(ix + l.dir, l.y.round() + 1)) {
+        l.x += l.dir * 3;
+        l.state = LemmingState.walking;
       }
       // Plafond ?
-      if (_solid(ix, lem.y.round() - 1)) {
-        lem.state = LemmingState.falling;
-        lem.dir *= -1;
+      if (solid(ix, l.y.round() - 1)) {
+        l.state = LemmingState.falling;
+        l.dir *= -1;
       }
       return;
     }
 
-    // === Marche normale ===
-    lem.state = LemmingState.walking;
-    final nextX = lem.x + lem.dir * walkSpeed * dt;
-    final nix = nextX.round();
+    // === Marche ===
+    l.state = LemmingState.walking;
+    final nx = l.x + l.dir * walkSpd * dt;
+    final nix = nx.round();
 
-    // Mur devant ?
-    if (_solid(nix + lem.dir, iy) && _solid(nix + lem.dir, iy - 1)) {
-      // Climber ?
-      if (lem.hasClimber) {
-        lem.state = LemmingState.climbing;
+    // Mur ?
+    if (solid(nix + l.dir, iy) && solid(nix + l.dir, iy - 1) && solid(nix + l.dir, iy - 2)) {
+      if (l.permClimber) {
+        l.state = LemmingState.climbing;
         return;
       }
-      // Demi-tour
-      lem.dir *= -1;
+      l.dir *= -1;
       return;
     }
 
-    // Monter une marche (max 2 pixels)
-    if (_solid(nix, iy) && !_solid(nix, iy - 1)) {
-      lem.y -= 1;
-    } else if (_solid(nix, iy) && _solid(nix, iy - 1) && !_solid(nix, iy - 2)) {
-      lem.y -= 2;
+    // Montée de marche (max 3 pixels)
+    int stepUp = 0;
+    while (solid(nix, (l.y - stepUp).round()) && stepUp < 4) {
+      stepUp++;
+    }
+    if (stepUp > 0 && stepUp <= 3) {
+      l.y -= stepUp;
+    } else if (stepUp > 3) {
+      // Mur trop haut
+      if (l.permClimber) {
+        l.state = LemmingState.climbing;
+        return;
+      }
+      l.dir *= -1;
+      return;
     }
 
-    lem.x = nextX;
+    l.x = nx;
 
-    // Collision avec les blockers
+    // Collision blockers
     for (final other in lemmings) {
-      if (other == lem || !other.alive || other.exited) continue;
+      if (other == l || !other.alive || other.exited) continue;
       if (other.state != LemmingState.blocking) continue;
-      if ((lem.x - other.x).abs() < 4 && (lem.y - other.y).abs() < 4) {
-        lem.dir *= -1;
-        lem.x += lem.dir * 5;
+      if ((l.x - other.x).abs() < 5 && (l.y - other.y).abs() < 5) {
+        l.dir *= -1;
+        l.x += l.dir * 6;
       }
     }
   }
 
-  // === Assigner compétence ===
+  // === Assignation de skill ===
   void assignSkill(double tapX, double tapY) {
     if (selectedSkill == LemmingSkill.none) return;
     final count = skills[selectedSkill] ?? 0;
     if (count <= 0) return;
 
-    Lemming? closest;
-    double bestDist = 10.0;
-    for (final lem in lemmings) {
-      if (!lem.alive || lem.exited) continue;
-      // Climber et floater sont permanents, on peut les ajouter même si déjà une autre skill
+    Lemming? best;
+    double bestD = 12.0;
+    for (final l in lemmings) {
+      if (!l.alive || l.exited) continue;
       if (selectedSkill != LemmingSkill.climber &&
           selectedSkill != LemmingSkill.floater) {
-        if (lem.skill != LemmingSkill.none &&
-            lem.state != LemmingState.walking &&
-            lem.state != LemmingState.falling) {
+        if (l.skill != LemmingSkill.none &&
+            l.state != LemmingState.walking &&
+            l.state != LemmingState.falling) {
           continue;
         }
       }
-      final d = sqrt(pow(lem.x - tapX, 2) + pow(lem.y - tapY, 2));
-      if (d < bestDist) {
-        closest = lem;
-        bestDist = d;
+      final d = sqrt(pow(l.x - tapX, 2) + pow(l.y - tapY, 2));
+      if (d < bestD) {
+        best = l;
+        bestD = d;
       }
     }
-
-    if (closest == null) return;
+    if (best == null) return;
 
     skills[selectedSkill] = count - 1;
-
     switch (selectedSkill) {
       case LemmingSkill.climber:
-        closest.hasClimber = true;
+        best.permClimber = true;
       case LemmingSkill.floater:
-        closest.hasFloater = true;
+        best.permFloater = true;
       case LemmingSkill.bomber:
-        closest.state = LemmingState.bombing;
-        closest.bomberTimer = 5.0;
+        best.state = LemmingState.bombing;
+        best.bomberTimer = 5.0;
       case LemmingSkill.blocker:
-        closest.skill = selectedSkill;
-        closest.state = LemmingState.blocking;
+        best.skill = selectedSkill;
+        best.state = LemmingState.blocking;
       case LemmingSkill.builder:
-        closest.skill = selectedSkill;
-        closest.state = LemmingState.building;
-        closest.buildCount = 0;
-        closest.actionCooldown = 0;
+        best.skill = selectedSkill;
+        best.state = LemmingState.building;
+        best.buildCount = 0;
+        best.actionCD = 0;
       case LemmingSkill.basher:
-        closest.skill = selectedSkill;
-        closest.state = LemmingState.bashing;
-        closest.actionCooldown = 0;
+        best.skill = selectedSkill;
+        best.state = LemmingState.bashing;
+        best.actionCD = 0;
       case LemmingSkill.miner:
-        closest.skill = selectedSkill;
-        closest.state = LemmingState.mining;
-        closest.actionCooldown = 0;
+        best.skill = selectedSkill;
+        best.state = LemmingState.mining;
+        best.actionCD = 0;
       case LemmingSkill.digger:
-        closest.skill = selectedSkill;
-        closest.state = LemmingState.digging;
-        closest.actionCooldown = 0;
+        best.skill = selectedSkill;
+        best.state = LemmingState.digging;
+        best.actionCD = 0;
       case LemmingSkill.none:
         break;
     }
   }
 
-  /// Nuke ! Tous les lemmings explosent
-  void nuke() {
-    nuked = true;
-  }
-
-  /// Augmenter le taux de spawn
-  void increaseRate() {
-    spawnRate = max(0.3, spawnRate - 0.2);
-  }
-
-  void decreaseRate() {
-    spawnRate = min(3.0, spawnRate + 0.2);
-  }
+  void nuke() => nuked = true;
+  void fasterRate() => spawnRate = max(0.2, spawnRate - 0.15);
+  void slowerRate() => spawnRate = min(3.0, spawnRate + 0.15);
 
   void _endLevel() {
     if (saved >= required_) {
@@ -683,339 +729,370 @@ class LemmingsGame {
     gameOver = true;
     onGameOver(score);
   }
-
-  static const totalLevels = 3;
 }
 
-// === PAINTER — rendu fidèle à l'original ===
+// =============================================================
+// PAINTER — rendu fidèle Lemmings original
+// =============================================================
 class LemmingsPainter extends CustomPainter {
   final LemmingsGame game;
-
   LemmingsPainter(this.game);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final scaleX = size.width / LemmingsGame.terrainW;
-    final scaleY = size.height / LemmingsGame.terrainH;
+    final sx = size.width / LemmingsGame.tw;
+    final sy = size.height / LemmingsGame.th;
 
-    // Fond — ciel bleu nuit (comme l'original)
+    // Fond bleu nuit
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = const Color(0xFF000044),
+      Paint()..color = const Color(0xFF000033),
     );
 
-    // Terrain — rendu pixel par pixel avec couleurs variées
-    for (int y = 0; y < LemmingsGame.terrainH; y++) {
-      for (int x = 0; x < LemmingsGame.terrainW; x++) {
-        final t = game._tget(x, y);
+    // Étoiles
+    final starPaint = Paint()..color = const Color(0xFF445588);
+    for (int i = 0; i < 40; i++) {
+      final stx = ((i * 97 + 31) % LemmingsGame.tw).toDouble() * sx;
+      final sty = ((i * 53 + 17) % (LemmingsGame.th ~/ 2)).toDouble() * sy;
+      canvas.drawCircle(Offset(stx, sty), 0.5 * sx, starPaint);
+    }
+
+    // Terrain — rendu avec les couleurs stockées
+    for (int y = 0; y < LemmingsGame.th; y++) {
+      for (int x = 0; x < LemmingsGame.tw; x++) {
+        final t = game.tget(x, y);
         if (t == 0) continue;
-        Color color;
-        if (t == 2) {
-          // Acier — gris métallique
-          color = ((x + y) % 2 == 0)
-              ? const Color(0xFF888899)
-              : const Color(0xFF777788);
-        } else {
-          // Terre — palette verte/brune comme l'original
-          final noise = ((x * 7 + y * 13) % 5);
-          color = switch (noise) {
-            0 => const Color(0xFF228822),
-            1 => const Color(0xFF117711),
-            2 => const Color(0xFF2B9A2B),
-            3 => const Color(0xFF1A881A),
-            _ => const Color(0xFF339933),
-          };
-          // Surface du terrain (1er pixel solide depuis le haut) → herbe claire
-          if (y > 0 && game._tget(x, y - 1) == 0) {
-            color = const Color(0xFF44DD44);
-          }
-        }
+        final c = game.terrainColor[y * LemmingsGame.tw + x];
         canvas.drawRect(
-          Rect.fromLTWH(x * scaleX, y * scaleY, scaleX + 0.5, scaleY + 0.5),
-          Paint()..color = color,
+          Rect.fromLTWH(x * sx, y * sy, sx + 0.5, sy + 0.5),
+          Paint()..color = Color(c | 0xFF000000),
         );
       }
     }
 
-    // Trappe d'entrée
-    _drawTrap(canvas, game.trapX * scaleX, game.trapY * scaleY,
-        scaleX, scaleY);
-
+    // Trappe
+    _drawTrap(canvas, game.trapX * sx, game.trapY * sy, sx, sy);
     // Sortie
-    _drawExit(canvas, game.exitX * scaleX, game.exitY * scaleY,
-        scaleX, scaleY);
+    _drawExit(canvas, game.exitX * sx, game.exitY * sy, sx, sy);
 
     // Lemmings
-    for (final lem in game.lemmings) {
-      if (!lem.alive && lem.state != LemmingState.splat) continue;
-      if (lem.exited) continue;
-      _drawLemming(canvas, lem, scaleX, scaleY);
+    for (final l in game.lemmings) {
+      if (l.exited) continue;
+      if (!l.alive && l.state != LemmingState.splatting) continue;
+      _drawLem(canvas, l, sx, sy);
     }
   }
 
   void _drawTrap(Canvas canvas, double x, double y, double sx, double sy) {
-    final w = 14 * sx;
-    final h = 8 * sy;
-    // Corps de la trappe
+    // Trappe métallique style original
+    final w = 16 * sx, h = 6 * sy;
+    final rect = Rect.fromCenter(center: Offset(x, y - h), width: w, height: h);
+    // Corps
     canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(x, y - h / 2), width: w, height: h),
-        Radius.circular(2 * sx),
-      ),
-      Paint()..color = const Color(0xFF8888AA),
+      RRect.fromRectAndRadius(rect, Radius.circular(sx)),
+      Paint()..color = const Color(0xFF8888BB),
     );
-    // Porte
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, Radius.circular(sx)),
+      Paint()
+        ..color = const Color(0xFFAAAADD)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = sx * 0.5,
+    );
+    // Ouverture
     if (game.trapOpen) {
       canvas.drawRect(
-        Rect.fromCenter(
-            center: Offset(x, y + 1 * sy), width: 6 * sx, height: 3 * sy),
-        Paint()..color = const Color(0xFF444466),
+        Rect.fromCenter(center: Offset(x, y), width: 6 * sx, height: 4 * sy),
+        Paint()..color = const Color(0xFF333355),
       );
     }
-    // Texte "IN"
+  }
+
+  void _drawExit(Canvas canvas, double x, double y, double sx, double sy) {
+    // Arche bleue lumineuse (comme l'original)
+    final w = 14 * sx, h = 16 * sy;
+    // Piliers
+    canvas.drawRect(
+      Rect.fromLTWH(x - w / 2, y - h, 3 * sx, h),
+      Paint()..color = const Color(0xFF2222AA),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(x + w / 2 - 3 * sx, y - h, 3 * sx, h),
+      Paint()..color = const Color(0xFF2222AA),
+    );
+    // Arc
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(x, y - h), width: w, height: h * 0.6),
+      pi,
+      pi,
+      false,
+      Paint()
+        ..color = const Color(0xFF4444FF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3 * sx,
+    );
+    // Lueur
+    canvas.drawCircle(
+      Offset(x, y - h * 0.5),
+      4 * sx,
+      Paint()..color = const Color(0xFF4488FF).withValues(alpha: 0.4),
+    );
+    // Bannière "HOME"
     final tp = TextPainter(
       text: TextSpan(
-        text: 'IN',
+        text: 'HOME',
         style: TextStyle(
-          color: Colors.white,
-          fontSize: 4 * sx,
+          color: const Color(0xFF88BBFF),
+          fontSize: 3.5 * sx,
           fontWeight: FontWeight.bold,
+          letterSpacing: sx,
         ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    tp.paint(canvas, Offset(x - tp.width / 2, y - h / 2 - 5 * sy));
+    tp.paint(canvas, Offset(x - tp.width / 2, y - h - 5 * sy));
   }
 
-  void _drawExit(Canvas canvas, double x, double y, double sx, double sy) {
-    final w = 12 * sx;
-    final h = 14 * sy;
-    // Arche de sortie
-    final archPath = Path()
-      ..moveTo(x - w / 2, y + 2 * sy)
-      ..lineTo(x - w / 2, y - h)
-      ..quadraticBezierTo(x, y - h - 4 * sy, x + w / 2, y - h)
-      ..lineTo(x + w / 2, y + 2 * sy)
-      ..close();
-    canvas.drawPath(archPath, Paint()..color = const Color(0xFF0000AA));
-    canvas.drawPath(
-      archPath,
-      Paint()
-        ..color = const Color(0xFF4444FF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
-    // Flèche
-    final arrowPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-    canvas.drawLine(
-      Offset(x, y - 3 * sy),
-      Offset(x, y - h + 3 * sy),
-      arrowPaint,
-    );
-    canvas.drawLine(
-      Offset(x - 3 * sx, y - h + 6 * sy),
-      Offset(x, y - h + 3 * sy),
-      arrowPaint,
-    );
-    canvas.drawLine(
-      Offset(x + 3 * sx, y - h + 6 * sy),
-      Offset(x, y - h + 3 * sy),
-      arrowPaint,
-    );
-  }
+  void _drawLem(Canvas canvas, Lemming l, double sx, double sy) {
+    final x = l.x * sx;
+    final y = l.y * sy;
+    // Le lemming fait ~4px large x 8px haut dans l'original
+    final lw = 2.5 * sx; // demi-largeur
+    final lh = 5.0 * sy; // hauteur totale
 
-  void _drawLemming(Canvas canvas, Lemming lem, double sx, double sy) {
-    final x = lem.x * sx;
-    final y = lem.y * sy;
-    final w = 3 * sx; // largeur du lemming
-    final h = 6 * sy; // hauteur
-
-    // Splat — juste une tache
-    if (lem.state == LemmingState.splat) {
+    // Splat
+    if (l.state == LemmingState.splatting) {
       canvas.drawOval(
-        Rect.fromCenter(center: Offset(x, y), width: w * 3, height: h * 0.4),
+        Rect.fromCenter(center: Offset(x, y), width: lw * 4, height: sy * 2),
         Paint()..color = const Color(0xFF00CC00),
       );
       return;
     }
 
-    // Couleur du corps — bleu comme l'original
-    const bodyColor = Color(0xFF4444FF);
-    // Cheveux verts — la signature !
-    const hairColor = Color(0xFF00FF00);
-    // Peau
-    const skinColor = Color(0xFFFFCC88);
+    // Couleurs classiques
+    const blue = Color(0xFF4444FF);
+    const green = Color(0xFF00FF00);
+    const skin = Color(0xFFFFCC88);
 
-    // Bomber — clignotement rouge + compteur
-    if (lem.state == LemmingState.bombing) {
-      final blink = (lem.bomberTimer * 4).floor() % 2 == 0;
-      // Compteur au-dessus
+    // Animation de marche
+    final frame = l.animFrame.floor() % 8;
+    final walkCycle = sin(frame / 8 * pi * 2);
+
+    // === Corps (tunique bleue) ===
+    final bodyTop = y - lh * 0.7;
+    final bodyBot = y - lh * 0.1;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(x - lw, bodyTop, x + lw, bodyBot),
+        Radius.circular(sx * 0.5),
+      ),
+      Paint()..color = blue,
+    );
+
+    // === Jambes (animation marche) ===
+    if (l.state == LemmingState.walking) {
+      final legOff = walkCycle * lw * 0.6;
+      canvas.drawLine(
+        Offset(x - lw * 0.3, bodyBot),
+        Offset(x - lw * 0.3 + legOff, y),
+        Paint()
+          ..color = blue
+          ..strokeWidth = sx * 1.2
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawLine(
+        Offset(x + lw * 0.3, bodyBot),
+        Offset(x + lw * 0.3 - legOff, y),
+        Paint()
+          ..color = blue
+          ..strokeWidth = sx * 1.2
+          ..strokeCap = StrokeCap.round,
+      );
+      // Pieds
+      canvas.drawCircle(Offset(x - lw * 0.3 + legOff, y), sx * 0.8,
+          Paint()..color = blue);
+      canvas.drawCircle(Offset(x + lw * 0.3 - legOff, y), sx * 0.8,
+          Paint()..color = blue);
+    } else {
+      // Debout
+      canvas.drawRect(
+        Rect.fromLTRB(x - lw * 0.6, bodyBot, x + lw * 0.6, y),
+        Paint()..color = blue,
+      );
+    }
+
+    // === Tête (peau) ===
+    final headY = y - lh * 0.8;
+    final headR = lw * 0.7;
+    canvas.drawCircle(Offset(x, headY), headR, Paint()..color = skin);
+
+    // === Cheveux verts (la signature !) ===
+    // Touffe de cheveux sur le dessus
+    final hairPath = Path();
+    hairPath.moveTo(x - lw * 0.8, headY);
+    hairPath.quadraticBezierTo(x - lw * 0.3, headY - lh * 0.35, x, headY - lh * 0.28);
+    hairPath.quadraticBezierTo(x + lw * 0.3, headY - lh * 0.35, x + lw * 0.8, headY);
+    hairPath.quadraticBezierTo(x + lw * 0.2, headY - lh * 0.15, x - lw * 0.2, headY - lh * 0.15);
+    hairPath.close();
+    canvas.drawPath(hairPath, Paint()..color = green);
+
+    // === Yeux ===
+    final eyeX = x + l.dir * lw * 0.25;
+    canvas.drawCircle(
+      Offset(eyeX, headY),
+      sx * 0.5,
+      Paint()..color = Colors.white,
+    );
+    canvas.drawCircle(
+      Offset(eyeX + l.dir * sx * 0.15, headY),
+      sx * 0.25,
+      Paint()..color = Colors.black,
+    );
+
+    // === Effets spéciaux des compétences ===
+
+    // Blocker — bras écartés
+    if (l.state == LemmingState.blocking) {
+      final armPaint = Paint()
+        ..color = skin
+        ..strokeWidth = sx * 1.0
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+        Offset(x, bodyTop + lh * 0.15),
+        Offset(x - lw * 2.5, bodyTop),
+        armPaint,
+      );
+      canvas.drawLine(
+        Offset(x, bodyTop + lh * 0.15),
+        Offset(x + lw * 2.5, bodyTop),
+        armPaint,
+      );
+      // Mains
+      canvas.drawCircle(Offset(x - lw * 2.5, bodyTop), sx, Paint()..color = skin);
+      canvas.drawCircle(Offset(x + lw * 2.5, bodyTop), sx, Paint()..color = skin);
+    }
+
+    // Floater — parapluie
+    if (l.state == LemmingState.floating) {
+      // Manche
+      canvas.drawLine(
+        Offset(x, headY - lh * 0.2),
+        Offset(x, headY - lh * 0.6),
+        Paint()
+          ..color = const Color(0xFF884422)
+          ..strokeWidth = sx * 0.8,
+      );
+      // Toile du parapluie
+      final umbPath = Path()
+        ..moveTo(x - lw * 3, headY - lh * 0.5)
+        ..quadraticBezierTo(x, headY - lh * 1.2, x + lw * 3, headY - lh * 0.5);
+      canvas.drawPath(
+        umbPath,
+        Paint()
+          ..color = const Color(0xFFFF44FF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = sx * 1.5,
+      );
+      canvas.drawPath(umbPath, Paint()..color = const Color(0xFFFF44FF).withValues(alpha: 0.3));
+    }
+
+    // Builder — bras avec brique
+    if (l.state == LemmingState.building) {
+      final brickPhase = (l.animFrame * 2).floor() % 2;
+      final armEndX = x + l.dir * lw * 2;
+      final armEndY = bodyTop - (brickPhase == 0 ? lh * 0.1 : 0);
+      canvas.drawLine(
+        Offset(x + l.dir * lw, bodyTop + lh * 0.1),
+        Offset(armEndX, armEndY),
+        Paint()
+          ..color = skin
+          ..strokeWidth = sx * 0.8,
+      );
+      // Brique
+      canvas.drawRect(
+        Rect.fromCenter(center: Offset(armEndX, armEndY), width: 3 * sx, height: 2 * sy),
+        Paint()..color = const Color(0xFF998866),
+      );
+    }
+
+    // Digger — pioche animée
+    if (l.state == LemmingState.digging) {
+      final pickPhase = (l.animFrame * 3).floor() % 2;
+      canvas.drawLine(
+        Offset(x + lw, bodyTop + lh * 0.1),
+        Offset(x + lw * 2, y + (pickPhase == 0 ? 0 : lh * 0.2)),
+        Paint()
+          ..color = const Color(0xFF888888)
+          ..strokeWidth = sx * 0.8
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Basher — poing animé
+    if (l.state == LemmingState.bashing) {
+      final bashPhase = (l.animFrame * 4).floor() % 2;
+      final fistX = x + l.dir * (lw * 2 + (bashPhase == 0 ? lw : 0));
+      canvas.drawLine(
+        Offset(x + l.dir * lw, bodyTop + lh * 0.15),
+        Offset(fistX, bodyTop + lh * 0.15),
+        Paint()
+          ..color = skin
+          ..strokeWidth = sx * 1.2
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Bomber — compteur rouge
+    if (l.state == LemmingState.bombing) {
+      final blink = (l.bomberTimer * 5).floor() % 2 == 0;
+      // Compte à rebours
       final tp = TextPainter(
         text: TextSpan(
-          text: '${lem.bomberTimer.ceil()}',
+          text: '${l.bomberTimer.ceil()}',
           style: TextStyle(
-            color: Colors.white,
+            color: blink ? Colors.red : Colors.white,
             fontSize: 4 * sx,
             fontWeight: FontWeight.bold,
           ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(x - tp.width / 2, y - h - 4 * sy));
+      tp.paint(canvas, Offset(x - tp.width / 2, headY - lh * 0.5));
       // Corps clignotant
-      _drawBody(canvas, x, y, w, h, blink ? Colors.red : bodyColor,
-          hairColor, skinColor, lem);
-      return;
+      if (blink) {
+        canvas.drawCircle(
+          Offset(x, bodyTop + lh * 0.15),
+          lw * 1.2,
+          Paint()..color = Colors.red.withValues(alpha: 0.4),
+        );
+      }
     }
 
-    _drawBody(canvas, x, y, w, h, bodyColor, hairColor, skinColor, lem);
-
-    // Floater — parapluie ouvert
-    if (lem.state == LemmingState.floating) {
-      final umbrellaPath = Path()
-        ..moveTo(x - 6 * sx, y - h - 1 * sy)
-        ..quadraticBezierTo(x, y - h - 8 * sy, x + 6 * sx, y - h - 1 * sy);
-      canvas.drawPath(
-        umbrellaPath,
-        Paint()
-          ..color = const Color(0xFFFF44FF)
-          ..style = PaintingStyle.fill,
-      );
+    // Climber — agrippé au mur
+    if (l.state == LemmingState.climbing) {
       canvas.drawLine(
-        Offset(x, y - h),
-        Offset(x, y - h - 4 * sy),
+        Offset(x + l.dir * lw, bodyTop),
+        Offset(x + l.dir * lw * 2, bodyTop - lh * 0.2),
         Paint()
-          ..color = const Color(0xFF884400)
-          ..strokeWidth = sx,
-      );
-    }
-
-    // Climber — petites mains accrochées
-    if (lem.state == LemmingState.climbing) {
-      canvas.drawLine(
-        Offset(x + lem.dir * w, y - h * 0.8),
-        Offset(x + lem.dir * w * 1.5, y - h),
-        Paint()
-          ..color = skinColor
+          ..color = skin
           ..strokeWidth = sx
           ..strokeCap = StrokeCap.round,
       );
     }
 
-    // Builder — marteau
-    if (lem.state == LemmingState.building) {
-      final phase = (lem.animTimer * 6).floor() % 2;
-      final hammerY = y - h * 0.5 - (phase == 0 ? 3 * sy : 0);
-      canvas.drawLine(
-        Offset(x + lem.dir * w, y - h * 0.5),
-        Offset(x + lem.dir * w * 2, hammerY),
-        Paint()
-          ..color = const Color(0xFF884400)
-          ..strokeWidth = sx * 1.5
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-
-    // Indicateurs permanents
-    if (lem.hasClimber) {
+    // Indicateurs permanents (petits dots)
+    if (l.permClimber) {
       canvas.drawCircle(
-        Offset(x - 3 * sx, y - h - 2 * sy),
-        sx,
+        Offset(x - lw * 1.5, headY - lh * 0.3),
+        sx * 0.6,
         Paint()..color = Colors.cyan,
       );
     }
-    if (lem.hasFloater) {
+    if (l.permFloater) {
       canvas.drawCircle(
-        Offset(x + 3 * sx, y - h - 2 * sy),
-        sx,
-        Paint()..color = Colors.pink,
-      );
-    }
-  }
-
-  void _drawBody(Canvas canvas, double x, double y, double w, double h,
-      Color body, Color hair, Color skin, Lemming lem) {
-    final dir = lem.dir;
-    // Animation de marche
-    final walkPhase = (lem.animTimer * 8).floor() % 4;
-    final legOffset = (walkPhase < 2 ? 1.0 : -1.0) *
-        (lem.state == LemmingState.walking ? 1.0 : 0.0);
-    final sx = w / 3;
-    final sy = h / 6;
-
-    // Pieds
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: Offset(x - sx + legOffset * sx, y + sy),
-        width: sx * 1.5,
-        height: sy * 1.5,
-      ),
-      Paint()..color = body,
-    );
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: Offset(x + sx - legOffset * sx, y + sy),
-        width: sx * 1.5,
-        height: sy * 1.5,
-      ),
-      Paint()..color = body,
-    );
-
-    // Corps (tunique bleue)
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: Offset(x, y - h * 0.35),
-        width: w * 1.2,
-        height: h * 0.45,
-      ),
-      Paint()..color = body,
-    );
-
-    // Tête (peau)
-    canvas.drawCircle(
-      Offset(x, y - h * 0.7),
-      w * 0.6,
-      Paint()..color = skin,
-    );
-
-    // Cheveux verts — la marque de fabrique !
-    canvas.drawArc(
-      Rect.fromCenter(
-        center: Offset(x, y - h * 0.75),
-        width: w * 1.4,
-        height: w * 1.2,
-      ),
-      -pi * 0.9,
-      pi * 0.8,
-      true,
-      Paint()..color = hair,
-    );
-
-    // Yeux
-    canvas.drawCircle(
-      Offset(x + dir * w * 0.2, y - h * 0.72),
-      sx * 0.4,
-      Paint()..color = Colors.black,
-    );
-
-    // Bras du blocker
-    if (lem.state == LemmingState.blocking) {
-      final armPaint = Paint()
-        ..color = body
-        ..strokeWidth = sx * 1.2
-        ..strokeCap = StrokeCap.round;
-      canvas.drawLine(
-        Offset(x, y - h * 0.4),
-        Offset(x - w * 2, y - h * 0.6),
-        armPaint,
-      );
-      canvas.drawLine(
-        Offset(x, y - h * 0.4),
-        Offset(x + w * 2, y - h * 0.6),
-        armPaint,
+        Offset(x + lw * 1.5, headY - lh * 0.3),
+        sx * 0.6,
+        Paint()..color = const Color(0xFFFF44FF),
       );
     }
   }
