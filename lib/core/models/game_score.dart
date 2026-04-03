@@ -3,10 +3,7 @@ import 'package:uuid/uuid.dart';
 /// Types de jeux disponibles dans "Chance du jour"
 enum GameType {
   tetris,
-  lemmings,
   marble,
-  kart,
-  worms,
 }
 
 /// Score d'un membre sur un jeu

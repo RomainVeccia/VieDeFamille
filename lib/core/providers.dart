@@ -11,11 +11,18 @@ import 'package:vie_de_famille/core/models/budget_category.dart';
 import 'package:vie_de_famille/core/models/expense.dart';
 import 'package:vie_de_famille/core/services/task_service.dart';
 import 'package:vie_de_famille/data/local/storage_service.dart';
+import 'package:vie_de_famille/core/models/claimed_reward.dart';
+import 'package:vie_de_famille/data/remote/sync_service.dart';
 
 // ============================================================
 // Storage — initialisé dans le splash, puis overridé
 // ============================================================
 final storageServiceProvider = Provider<StorageService?>((ref) => null);
+
+// ============================================================
+// Sync Service — NullSync par défaut, FirestoreSync après init Firebase
+// ============================================================
+final syncServiceProvider = Provider<SyncService>((ref) => const NullSync());
 
 // ============================================================
 // MEMBRES
@@ -99,13 +106,11 @@ final currentMemberDataProvider = Provider<Member?>((ref) {
 
   if (members.isEmpty) return null;
 
-  // Chercher le membre courant par son id
   if (memberId != null) {
     final found = members.where((m) => m.id == memberId);
     if (found.isNotEmpty) return found.first;
   }
 
-  // Fallback : retourner le premier membre (sans modifier l'état ici)
   return members.first;
 });
 
@@ -114,11 +119,29 @@ final currentMemberDataProvider = Provider<Member?>((ref) {
 // ============================================================
 class TasksNotifier extends StateNotifier<List<FamilyTask>> {
   final StorageService? _storage;
+  final SyncService _sync;
   final Ref _ref;
 
-  TasksNotifier(this._storage, this._ref) : super(_storage?.getTasks() ?? []) {
-    // Reset automatique des tâches récurrentes complétées la veille
+  static const _col = 'tasks';
+
+  TasksNotifier(this._storage, this._sync, this._ref)
+      : super(_storage?.getTasks() ?? []) {
     _resetRecurringTasks();
+    _listenRemote();
+  }
+
+  /// Écoute Firestore et met à jour l'état local en temps réel
+  void _listenRemote() {
+    _sync.watch(_col)?.listen((remoteData) {
+      if (!mounted) return;
+      try {
+        final items = remoteData
+            .map((e) => FamilyTask.fromJson(e))
+            .toList();
+        state = items;
+        _storage?.saveTasks(state);
+      } catch (_) {}
+    });
   }
 
   /// Remet à zéro les tâches récurrentes complétées avant aujourd'hui 7h
@@ -131,7 +154,6 @@ class TasksNotifier extends StateNotifier<List<FamilyTask>> {
       if (!t.completed) return t;
       if (t.recurrence == TaskRecurrence.none) return t;
       if (t.completedAt == null) return t;
-      // Si complétée avant aujourd'hui 7h → reset
       if (t.completedAt!.isBefore(today7h)) {
         changed = true;
         return t.uncomplete();
@@ -145,48 +167,49 @@ class TasksNotifier extends StateNotifier<List<FamilyTask>> {
   Future<void> add(FamilyTask task) async {
     state = [...state, task];
     await _storage?.saveTasks(state);
+    await _sync.upsert(_col, task.toJson());
   }
 
   /// Toggle complete — ajoute/retire les points automatiquement
   Future<void> toggle(String taskId) async {
+    FamilyTask? updated;
     state = state.map((t) {
       if (t.id != taskId) return t;
       if (t.completed) {
-        // Décoche → retirer les points
         if (t.assignedTo != null) {
-          _ref
-              .read(membersProvider.notifier)
-              .removePoints(t.assignedTo!, t.pointsValue);
+          _ref.read(membersProvider.notifier).removePoints(t.assignedTo!, t.pointsValue);
         }
-        return t.uncomplete();
+        updated = t.uncomplete();
       } else {
-        // Coche → ajouter les points
         if (t.assignedTo != null) {
-          _ref
-              .read(membersProvider.notifier)
-              .addPoints(t.assignedTo!, t.pointsValue);
+          _ref.read(membersProvider.notifier).addPoints(t.assignedTo!, t.pointsValue);
         }
-        return t.complete();
+        updated = t.complete();
       }
+      return updated!;
     }).toList();
     await _storage?.saveTasks(state);
+    if (updated != null) await _sync.upsert(_col, updated!.toJson());
   }
 
   Future<void> remove(String id) async {
     state = state.where((t) => t.id != id).toList();
     await _storage?.saveTasks(state);
+    await _sync.delete(_col, id);
   }
 
   Future<void> update(FamilyTask task) async {
     state = state.map((t) => t.id == task.id ? task : t).toList();
     await _storage?.saveTasks(state);
+    await _sync.upsert(_col, task.toJson());
   }
 }
 
 final tasksProvider =
     StateNotifierProvider<TasksNotifier, List<FamilyTask>>((ref) {
   final storage = ref.watch(storageServiceProvider);
-  return TasksNotifier(storage, ref);
+  final sync = ref.watch(syncServiceProvider);
+  return TasksNotifier(storage, sync, ref);
 });
 
 /// Tâches du jour
@@ -200,41 +223,68 @@ final todayTasksProvider = Provider<List<FamilyTask>>((ref) {
 // ============================================================
 class MessagesNotifier extends StateNotifier<List<FamilyMessage>> {
   final StorageService? _storage;
+  final SyncService _sync;
 
-  MessagesNotifier(this._storage) : super(_storage?.getMessages() ?? []);
+  static const _col = 'messages';
+
+  MessagesNotifier(this._storage, this._sync)
+      : super(_storage?.getMessages() ?? []) {
+    _listenRemote();
+  }
+
+  void _listenRemote() {
+    _sync.watch(_col)?.listen((remoteData) {
+      if (!mounted) return;
+      try {
+        final items = remoteData.map((e) => FamilyMessage.fromJson(e)).toList();
+        // Trier par date décroissante
+        items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        state = items;
+        _storage?.saveMessages(state);
+      } catch (_) {}
+    });
+  }
 
   Future<void> add(FamilyMessage message) async {
     state = [message, ...state];
     await _storage?.saveMessages(state);
+    await _sync.upsert(_col, message.toJson());
   }
 
   Future<void> togglePin(String id) async {
+    FamilyMessage? updated;
     state = state.map((m) {
       if (m.id != id) return m;
-      return m.copyWith(pinned: !m.pinned);
+      updated = m.copyWith(pinned: !m.pinned);
+      return updated!;
     }).toList();
     await _storage?.saveMessages(state);
+    if (updated != null) await _sync.upsert(_col, updated!.toJson());
   }
 
   Future<void> remove(String id) async {
     state = state.where((m) => m.id != id).toList();
     await _storage?.saveMessages(state);
+    await _sync.delete(_col, id);
   }
 
-  /// Marquer une requête comme faite / pas faite
   Future<void> toggleDone(String id) async {
+    FamilyMessage? updated;
     state = state.map((m) {
       if (m.id != id) return m;
-      return m.copyWith(done: !m.done);
+      updated = m.copyWith(done: !m.done);
+      return updated!;
     }).toList();
     await _storage?.saveMessages(state);
+    if (updated != null) await _sync.upsert(_col, updated!.toJson());
   }
 }
 
 final messagesProvider =
     StateNotifierProvider<MessagesNotifier, List<FamilyMessage>>((ref) {
   final storage = ref.watch(storageServiceProvider);
-  return MessagesNotifier(storage);
+  final sync = ref.watch(syncServiceProvider);
+  return MessagesNotifier(storage, sync);
 });
 
 /// Messages/requêtes reçus par un membre spécifique
@@ -249,29 +299,50 @@ final messagesForMemberProvider =
 // ============================================================
 class EventsNotifier extends StateNotifier<List<FamilyEvent>> {
   final StorageService? _storage;
+  final SyncService _sync;
 
-  EventsNotifier(this._storage) : super(_storage?.getEvents() ?? []);
+  static const _col = 'events';
+
+  EventsNotifier(this._storage, this._sync)
+      : super(_storage?.getEvents() ?? []) {
+    _listenRemote();
+  }
+
+  void _listenRemote() {
+    _sync.watch(_col)?.listen((remoteData) {
+      if (!mounted) return;
+      try {
+        final items = remoteData.map((e) => FamilyEvent.fromJson(e)).toList();
+        state = items;
+        _storage?.saveEvents(state);
+      } catch (_) {}
+    });
+  }
 
   Future<void> add(FamilyEvent event) async {
     state = [...state, event];
     await _storage?.saveEvents(state);
+    await _sync.upsert(_col, event.toJson());
   }
 
   Future<void> update(FamilyEvent event) async {
     state = state.map((e) => e.id == event.id ? event : e).toList();
     await _storage?.saveEvents(state);
+    await _sync.upsert(_col, event.toJson());
   }
 
   Future<void> remove(String id) async {
     state = state.where((e) => e.id != id).toList();
     await _storage?.saveEvents(state);
+    await _sync.delete(_col, id);
   }
 }
 
 final eventsProvider =
     StateNotifierProvider<EventsNotifier, List<FamilyEvent>>((ref) {
   final storage = ref.watch(storageServiceProvider);
-  return EventsNotifier(storage);
+  final sync = ref.watch(syncServiceProvider);
+  return EventsNotifier(storage, sync);
 });
 
 /// Événements d'un jour spécifique
@@ -294,6 +365,11 @@ class RewardsNotifier extends StateNotifier<List<Reward>> {
     await _storage?.saveRewards(state);
   }
 
+  Future<void> update(Reward reward) async {
+    state = state.map((r) => r.id == reward.id ? reward : r).toList();
+    await _storage?.saveRewards(state);
+  }
+
   Future<void> remove(String id) async {
     state = state.where((r) => r.id != id).toList();
     await _storage?.saveRewards(state);
@@ -304,6 +380,30 @@ final rewardsProvider =
     StateNotifierProvider<RewardsNotifier, List<Reward>>((ref) {
   final storage = ref.watch(storageServiceProvider);
   return RewardsNotifier(storage);
+});
+
+// ============================================================
+// RÉCOMPENSES ÉCHANGÉES (historique)
+// ============================================================
+class ClaimedRewardsNotifier extends StateNotifier<List<ClaimedReward>> {
+  final StorageService? _storage;
+
+  ClaimedRewardsNotifier(this._storage)
+      : super(_storage?.getClaimedRewards() ?? []);
+
+  Future<void> add(ClaimedReward claim) async {
+    state = [claim, ...state];
+    await _storage?.saveClaimedRewards(state);
+  }
+
+  List<ClaimedReward> forMember(String memberId) =>
+      state.where((c) => c.memberId == memberId).toList();
+}
+
+final claimedRewardsProvider =
+    StateNotifierProvider<ClaimedRewardsNotifier, List<ClaimedReward>>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return ClaimedRewardsNotifier(storage);
 });
 
 // ============================================================
@@ -332,30 +432,50 @@ final gameScoresProvider =
 // ============================================================
 class ShoppingListsNotifier extends StateNotifier<List<ShoppingList>> {
   final StorageService? _storage;
+  final SyncService _sync;
 
-  ShoppingListsNotifier(this._storage)
-      : super(_storage?.getShoppingLists() ?? []);
+  static const _col = 'shopping_lists';
+
+  ShoppingListsNotifier(this._storage, this._sync)
+      : super(_storage?.getShoppingLists() ?? []) {
+    _listenRemote();
+  }
+
+  void _listenRemote() {
+    _sync.watch(_col)?.listen((remoteData) {
+      if (!mounted) return;
+      try {
+        final items = remoteData.map((e) => ShoppingList.fromJson(e)).toList();
+        state = items;
+        _storage?.saveShoppingLists(state);
+      } catch (_) {}
+    });
+  }
 
   Future<void> add(ShoppingList list) async {
     state = [...state, list];
     await _storage?.saveShoppingLists(state);
+    await _sync.upsert(_col, list.toJson());
   }
 
   Future<void> remove(String id) async {
     state = state.where((l) => l.id != id).toList();
     await _storage?.saveShoppingLists(state);
+    await _sync.delete(_col, id);
   }
 
   Future<void> update(ShoppingList list) async {
     state = state.map((l) => l.id == list.id ? list : l).toList();
     await _storage?.saveShoppingLists(state);
+    await _sync.upsert(_col, list.toJson());
   }
 }
 
 final shoppingListsProvider =
     StateNotifierProvider<ShoppingListsNotifier, List<ShoppingList>>((ref) {
   final storage = ref.watch(storageServiceProvider);
-  return ShoppingListsNotifier(storage);
+  final sync = ref.watch(syncServiceProvider);
+  return ShoppingListsNotifier(storage, sync);
 });
 
 // ============================================================
@@ -363,45 +483,78 @@ final shoppingListsProvider =
 // ============================================================
 class ShoppingItemsNotifier extends StateNotifier<List<ShoppingItem>> {
   final StorageService? _storage;
+  final SyncService _sync;
 
-  ShoppingItemsNotifier(this._storage)
-      : super(_storage?.getShoppingItems() ?? []);
+  static const _col = 'shopping_items';
+
+  ShoppingItemsNotifier(this._storage, this._sync)
+      : super(_storage?.getShoppingItems() ?? []) {
+    _listenRemote();
+  }
+
+  void _listenRemote() {
+    _sync.watch(_col)?.listen((remoteData) {
+      if (!mounted) return;
+      try {
+        final items = remoteData.map((e) => ShoppingItem.fromJson(e)).toList();
+        state = items;
+        _storage?.saveShoppingItems(state);
+      } catch (_) {}
+    });
+  }
 
   Future<void> add(ShoppingItem item) async {
     state = [...state, item];
     await _storage?.saveShoppingItems(state);
+    await _sync.upsert(_col, item.toJson());
   }
 
   Future<void> toggle(String itemId) async {
+    ShoppingItem? updated;
     state = state.map((i) {
       if (i.id != itemId) return i;
-      return i.checked ? i.uncheck() : i.check();
+      updated = i.checked ? i.uncheck() : i.check();
+      return updated!;
     }).toList();
     await _storage?.saveShoppingItems(state);
+    if (updated != null) await _sync.upsert(_col, updated!.toJson());
   }
 
   Future<void> remove(String id) async {
     state = state.where((i) => i.id != id).toList();
     await _storage?.saveShoppingItems(state);
+    await _sync.delete(_col, id);
   }
 
-  /// Supprimer tous les articles d'une liste (quand on supprime la liste)
   Future<void> removeForList(String listId) async {
+    final toDelete = state.where((i) => i.listId == listId).toList();
     state = state.where((i) => i.listId != listId).toList();
     await _storage?.saveShoppingItems(state);
+    for (final item in toDelete) {
+      await _sync.delete(_col, item.id);
+    }
   }
 
-  /// Décocher tous les articles d'une liste (nouvelle session courses)
   Future<void> uncheckAll(String listId) async {
-    state = state.map((i) => i.listId == listId ? i.uncheck() : i).toList();
+    final toUpdate = <ShoppingItem>[];
+    state = state.map((i) {
+      if (i.listId != listId) return i;
+      final u = i.uncheck();
+      toUpdate.add(u);
+      return u;
+    }).toList();
     await _storage?.saveShoppingItems(state);
+    for (final item in toUpdate) {
+      await _sync.upsert(_col, item.toJson());
+    }
   }
 }
 
 final shoppingItemsProvider =
     StateNotifierProvider<ShoppingItemsNotifier, List<ShoppingItem>>((ref) {
   final storage = ref.watch(storageServiceProvider);
-  return ShoppingItemsNotifier(storage);
+  final sync = ref.watch(syncServiceProvider);
+  return ShoppingItemsNotifier(storage, sync);
 });
 
 // ============================================================
@@ -441,27 +594,56 @@ final budgetCategoriesProvider =
 // ============================================================
 class ExpensesNotifier extends StateNotifier<List<Expense>> {
   final StorageService? _storage;
+  final SyncService _sync;
 
-  ExpensesNotifier(this._storage) : super(_storage?.getExpenses() ?? []);
+  static const _col = 'expenses';
+
+  ExpensesNotifier(this._storage, this._sync)
+      : super(_storage?.getExpenses() ?? []) {
+    _listenRemote();
+  }
+
+  void _listenRemote() {
+    _sync.watch(_col)?.listen((remoteData) {
+      if (!mounted) return;
+      try {
+        final items = remoteData.map((e) => Expense.fromJson(e)).toList();
+        state = items;
+        _storage?.saveExpenses(state);
+      } catch (_) {}
+    });
+  }
 
   Future<void> add(Expense expense) async {
     state = [...state, expense];
     await _storage?.saveExpenses(state);
+    await _sync.upsert(_col, expense.toJson());
   }
 
   Future<void> remove(String id) async {
     state = state.where((e) => e.id != id).toList();
     await _storage?.saveExpenses(state);
+    await _sync.delete(_col, id);
   }
 
   Future<void> update(Expense expense) async {
     state = state.map((e) => e.id == expense.id ? expense : e).toList();
     await _storage?.saveExpenses(state);
+    await _sync.upsert(_col, expense.toJson());
   }
 }
 
 final expensesProvider =
     StateNotifierProvider<ExpensesNotifier, List<Expense>>((ref) {
   final storage = ref.watch(storageServiceProvider);
-  return ExpensesNotifier(storage);
+  final sync = ref.watch(syncServiceProvider);
+  return ExpensesNotifier(storage, sync);
+});
+
+// ============================================================
+// STATUT DE SYNCHRONISATION
+// ============================================================
+final syncStatusProvider = Provider<bool>((ref) {
+  final sync = ref.watch(syncServiceProvider);
+  return sync.isActive;
 });

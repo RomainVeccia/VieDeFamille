@@ -38,14 +38,8 @@ class GameScoreService {
     switch (type) {
       case GameType.tetris:
         return 'Tetris';
-      case GameType.lemmings:
-        return 'Lemmings';
       case GameType.marble:
         return 'Marble Madness';
-      case GameType.kart:
-        return 'Kart Racing';
-      case GameType.worms:
-        return 'Worms';
     }
   }
 
@@ -54,14 +48,8 @@ class GameScoreService {
     switch (type) {
       case GameType.tetris:
         return '🧱';
-      case GameType.lemmings:
-        return '🐹';
       case GameType.marble:
         return '🔮';
-      case GameType.kart:
-        return '🏎️';
-      case GameType.worms:
-        return '🪱';
     }
   }
 }

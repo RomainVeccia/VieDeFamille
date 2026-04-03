@@ -6,10 +6,7 @@ import 'package:vie_de_famille/core/models/member.dart';
 import 'package:vie_de_famille/core/providers.dart';
 import 'package:vie_de_famille/core/services/game_score_service.dart';
 import 'package:vie_de_famille/ui/screens/games/tetris_game_screen.dart';
-import 'package:vie_de_famille/ui/screens/games/lemmings_game_screen.dart';
 import 'package:vie_de_famille/ui/screens/games/marble_game_screen.dart';
-import 'package:vie_de_famille/ui/screens/games/kart_game_screen.dart';
-import 'package:vie_de_famille/ui/screens/games/worms_game_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 import 'package:vie_de_famille/ui/widgets/member_avatar.dart';
 
@@ -28,7 +25,6 @@ class _GameSelectionScreenState extends ConsumerState<GameSelectionScreen> {
   @override
   void initState() {
     super.initState();
-    // Par défaut, le membre courant
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final current = ref.read(currentMemberDataProvider);
       if (current != null) {
@@ -123,7 +119,6 @@ class _GameSelectionScreenState extends ConsumerState<GameSelectionScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Titre
             Text(
               'Choisis ton jeu ! 🎮',
               style: GoogleFonts.quicksand(
@@ -142,7 +137,6 @@ class _GameSelectionScreenState extends ConsumerState<GameSelectionScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Cartes de jeux
             _buildGameCard(
               context: context,
               emoji: '🧱',
@@ -165,26 +159,6 @@ class _GameSelectionScreenState extends ConsumerState<GameSelectionScreen> {
             const SizedBox(height: 12),
             _buildGameCard(
               context: context,
-              emoji: '🐹',
-              title: 'Lemmings',
-              subtitle: 'Sauve les petits lemmings !',
-              color: const Color(0xFF4CAF50),
-              bestScore: selected != null
-                  ? GameScoreService.memberBestScore(
-                      scores, selected.id, GameType.lemmings)
-                  : 0,
-              onTap: selected != null
-                  ? () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              LemmingsGameScreen(playerId: selected.id),
-                        ),
-                      )
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            _buildGameCard(
-              context: context,
               emoji: '🔮',
               title: 'Marble Madness',
               subtitle: 'Guide la bille jusqu\'au bout !',
@@ -198,46 +172,6 @@ class _GameSelectionScreenState extends ConsumerState<GameSelectionScreen> {
                         MaterialPageRoute(
                           builder: (_) =>
                               MarbleGameScreen(playerId: selected.id),
-                        ),
-                      )
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            _buildGameCard(
-              context: context,
-              emoji: '🏎️',
-              title: 'Kart Racing',
-              subtitle: 'Course folle en pseudo-3D !',
-              color: const Color(0xFFE53935),
-              bestScore: selected != null
-                  ? GameScoreService.memberBestScore(
-                      scores, selected.id, GameType.kart)
-                  : 0,
-              onTap: selected != null
-                  ? () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              KartGameScreen(playerId: selected.id),
-                        ),
-                      )
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            _buildGameCard(
-              context: context,
-              emoji: '🪱',
-              title: 'Worms',
-              subtitle: 'Artillerie au tour par tour !',
-              color: const Color(0xFFFF8A80),
-              bestScore: selected != null
-                  ? GameScoreService.memberBestScore(
-                      scores, selected.id, GameType.worms)
-                  : 0,
-              onTap: selected != null
-                  ? () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              WormsGameScreen(playerId: selected.id),
                         ),
                       )
                   : null,

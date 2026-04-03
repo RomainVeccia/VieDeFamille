@@ -10,6 +10,7 @@ import 'package:vie_de_famille/core/models/shopping_list.dart';
 import 'package:vie_de_famille/core/models/shopping_item.dart';
 import 'package:vie_de_famille/core/models/budget_category.dart';
 import 'package:vie_de_famille/core/models/expense.dart';
+import 'package:vie_de_famille/core/models/claimed_reward.dart';
 
 /// Service de stockage local — SharedPreferences + JSON
 class StorageService {
@@ -24,6 +25,7 @@ class StorageService {
   static const _shoppingItemsKey = 'vdf_shopping_items';
   static const _budgetCategoriesKey = 'vdf_budget_categories';
   static const _expensesKey = 'vdf_expenses';
+  static const _claimedRewardsKey = 'vdf_claimed_rewards';
 
   // Singleton
   static StorageService? _instance;
@@ -39,10 +41,11 @@ class StorageService {
     service._prefs = await SharedPreferences.getInstance();
     _instance = service;
 
-    // Seed les membres de la famille au premier lancement
+    // Seed les données par défaut au premier lancement
     if (!service._prefs.containsKey(_seededKey)) {
       await service._seedDefaultMembers();
       await service._seedDefaultBudgetCategories();
+      await service._seedDefaultRewards();
       await service._prefs.setBool(_seededKey, true);
     }
 
@@ -254,5 +257,34 @@ class StorageService {
   /// Initialise les catégories de budget par défaut
   Future<void> _seedDefaultBudgetCategories() async {
     await saveBudgetCategories(BudgetCategory.defaults());
+  }
+
+  // --- Claimed Rewards ---
+  List<ClaimedReward> getClaimedRewards() {
+    final json = _prefs.getString(_claimedRewardsKey);
+    if (json == null) return [];
+    final list = jsonDecode(json) as List<dynamic>;
+    return list
+        .map((e) => ClaimedReward.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveClaimedRewards(List<ClaimedReward> claims) async {
+    final json = jsonEncode(claims.map((c) => c.toJson()).toList());
+    await _prefs.setString(_claimedRewardsKey, json);
+  }
+
+  /// Pré-charge les 16 récompenses par défaut (3 niveaux)
+  Future<void> _seedDefaultRewards() async {
+    final now = DateTime.now();
+    final rewards = RewardTemplates.all.map((r) => Reward(
+      id: 'reward_${r.$3}_${r.$2.hashCode.abs()}',
+      title: r.$2,
+      emoji: r.$1,
+      cost: r.$3,
+      createdBy: 'romain',
+      createdAt: now,
+    )).toList();
+    await saveRewards(rewards);
   }
 }

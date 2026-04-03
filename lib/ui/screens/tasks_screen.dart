@@ -113,6 +113,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                           onToggle: (_) => ref
                               .read(tasksProvider.notifier)
                               .toggle(task.id),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => AddTaskScreen(task: task),
+                            ),
+                          ),
                           onDismissed: () => ref
                               .read(tasksProvider.notifier)
                               .remove(task.id),
@@ -158,6 +163,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                               onToggle: (_) => ref
                                   .read(tasksProvider.notifier)
                                   .toggle(task.id),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => AddTaskScreen(task: task),
+                                ),
+                              ),
                             );
                           }),
                       ],

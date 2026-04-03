@@ -11,6 +11,7 @@ import 'package:vie_de_famille/core/services/task_service.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 import 'package:vie_de_famille/ui/widgets/member_avatar.dart';
 import 'package:vie_de_famille/ui/widgets/task_card.dart';
+import 'package:vie_de_famille/core/models/claimed_reward.dart';
 
 /// Profil d'un membre — avatar, infos, points, tâches, messages, requêtes
 class MemberProfileScreen extends ConsumerWidget {
@@ -28,6 +29,8 @@ class MemberProfileScreen extends ConsumerWidget {
 
     final allTasks = ref.watch(tasksProvider);
     final memberTasks = TaskService.forMember(allTasks, liveMember.id);
+    final allClaims = ref.watch(claimedRewardsProvider);
+    final memberClaims = allClaims.where((c) => c.memberId == liveMember.id).toList();
     final pendingTasks = memberTasks.where((t) => !t.completed).toList();
     final completedTasks = memberTasks.where((t) => t.completed).toList();
 
@@ -292,7 +295,72 @@ class MemberProfileScreen extends ConsumerWidget {
                     ),
                   )),
             ],
+
+            // === Section récompenses obtenues ===
+            const SizedBox(height: 24),
+            _sectionTitle(
+                'Récompenses obtenues (${memberClaims.length})',
+                Icons.emoji_events),
+            const SizedBox(height: 8),
+            if (memberClaims.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'Aucune récompense encore échangée',
+                  style: GoogleFonts.nunito(color: AppTheme.textSecondary),
+                ),
+              )
+            else
+              ...memberClaims.map((claim) => _buildClaimCard(claim)),
+            const SizedBox(height: 24),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClaimCard(ClaimedReward claim) {
+    return Card(
+      child: ListTile(
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFB300).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(claim.rewardEmoji, style: const TextStyle(fontSize: 22)),
+          ),
+        ),
+        title: Text(
+          claim.rewardTitle,
+          style: GoogleFonts.nunito(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        subtitle: Text(
+          DateFormat('dd/MM/yyyy').format(claim.claimedAt),
+          style: GoogleFonts.nunito(
+            fontSize: 12,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFB300).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '-${claim.cost} pts',
+            style: GoogleFonts.nunito(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFFE65100),
+            ),
+          ),
         ),
       ),
     );

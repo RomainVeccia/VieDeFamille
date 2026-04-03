@@ -7,9 +7,11 @@ import 'package:vie_de_famille/core/providers.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 import 'package:vie_de_famille/ui/widgets/member_avatar.dart';
 
-/// Formulaire de création d'une tâche
+/// Formulaire de création/édition d'une tâche
 class AddTaskScreen extends ConsumerStatefulWidget {
-  const AddTaskScreen({super.key});
+  final FamilyTask? task; // null = création, non-null = édition
+
+  const AddTaskScreen({super.key, this.task});
 
   @override
   ConsumerState<AddTaskScreen> createState() => _AddTaskScreenState();
@@ -17,12 +19,26 @@ class AddTaskScreen extends ConsumerStatefulWidget {
 
 class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _descController = TextEditingController();
+  late final TextEditingController _titleController;
+  late final TextEditingController _descController;
   String? _assignedTo;
-  TaskPriority _priority = TaskPriority.medium;
+  late TaskPriority _priority;
   DateTime? _dueDate;
-  double _pointsValue = 10;
+  late double _pointsValue;
+
+  bool get _isEditing => widget.task != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final t = widget.task;
+    _titleController = TextEditingController(text: t?.title ?? '');
+    _descController = TextEditingController(text: t?.description ?? '');
+    _assignedTo = t?.assignedTo;
+    _priority = t?.priority ?? TaskPriority.medium;
+    _dueDate = t?.dueDate;
+    _pointsValue = (t?.pointsValue ?? 10).toDouble();
+  }
 
   @override
   void dispose() {
@@ -44,22 +60,45 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final currentMember = ref.read(currentMemberDataProvider);
-    if (currentMember == null) return;
+    final notifier = ref.read(tasksProvider.notifier);
 
-    final task = FamilyTask.create(
-      title: _titleController.text.trim(),
-      description: _descController.text.trim().isEmpty
-          ? null
-          : _descController.text.trim(),
-      assignedTo: _assignedTo,
-      createdBy: currentMember.id,
-      priority: _priority,
-      dueDate: _dueDate,
-      pointsValue: _pointsValue.round(),
-    );
+    if (_isEditing) {
+      final t = widget.task!;
+      final updated = FamilyTask(
+        id: t.id,
+        title: _titleController.text.trim(),
+        description: _descController.text.trim().isEmpty
+            ? null
+            : _descController.text.trim(),
+        assignedTo: _assignedTo,
+        createdBy: t.createdBy,
+        priority: _priority,
+        recurrence: t.recurrence,
+        category: t.category,
+        dueDate: _dueDate,
+        completed: t.completed,
+        completedAt: t.completedAt,
+        pointsValue: _pointsValue.round(),
+        createdAt: t.createdAt,
+      );
+      await notifier.update(updated);
+    } else {
+      final currentMember = ref.read(currentMemberDataProvider);
+      if (currentMember == null) return;
+      final task = FamilyTask.create(
+        title: _titleController.text.trim(),
+        description: _descController.text.trim().isEmpty
+            ? null
+            : _descController.text.trim(),
+        assignedTo: _assignedTo,
+        createdBy: currentMember.id,
+        priority: _priority,
+        dueDate: _dueDate,
+        pointsValue: _pointsValue.round(),
+      );
+      await notifier.add(task);
+    }
 
-    await ref.read(tasksProvider.notifier).add(task);
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -75,7 +114,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Nouvelle tâche',
+          _isEditing ? 'Modifier la tâche' : 'Nouvelle tâche',
           style: GoogleFonts.quicksand(fontWeight: FontWeight.bold),
         ),
       ),
@@ -264,7 +303,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _save,
-                  child: const Text('Créer la tâche'),
+                  child: Text(_isEditing ? 'Enregistrer' : 'Créer la tâche'),
                 ),
               ),
             ],

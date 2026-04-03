@@ -4,22 +4,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:vie_de_famille/core/providers.dart';
 import 'package:vie_de_famille/data/local/storage_service.dart';
+import 'package:vie_de_famille/data/remote/firestore_sync.dart';
+import 'package:vie_de_famille/data/remote/sync_service.dart';
 import 'package:vie_de_famille/ui/screens/splash_screen.dart';
 import 'package:vie_de_famille/ui/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialiser les locales pour intl (dates en français)
+  // Locales pour intl (dates en français)
   await initializeDateFormatting('fr_FR', null);
 
-  // Initialiser le storage local
+  // Storage local
   final storage = await StorageService.getInstance();
+
+  // Sync Firebase (échoue proprement si non configuré → NullSync)
+  final SyncService sync = await FirestoreSync.tryInit() ?? const NullSync();
 
   runApp(
     ProviderScope(
       overrides: [
         storageServiceProvider.overrideWithValue(storage),
+        syncServiceProvider.overrideWithValue(sync),
       ],
       child: const VieDeFamilleApp(),
     ),

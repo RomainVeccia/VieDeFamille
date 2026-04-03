@@ -27,11 +27,9 @@ dependencies:
   shared_preferences: ^2.3.4
   path_provider: ^2.1.5
 
-  # Firebase (sync famille, auth, notifications) — activé en V2
-  # firebase_core: ^2.24.0
-  # firebase_auth: ^4.16.0
-  # cloud_firestore: ^4.14.0
-  # firebase_messaging: ^14.0.0
+  # Firebase — sync famille temps réel
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
 
   # Calendrier
   table_calendar: ^3.1.3

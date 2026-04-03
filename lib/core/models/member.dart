@@ -47,6 +47,10 @@ class Member {
     );
   }
 
+  /// Parent = Papa ou Maman (peut gérer les récompenses)
+  bool get isParent =>
+      ['papa', 'maman'].contains(status.toLowerCase().trim());
+
   /// Calcule l'âge depuis la date de naissance
   int get age {
     final now = DateTime.now();
